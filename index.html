@@ -1763,7 +1763,7 @@
             </div>
             <div class="flex justify-end gap-2">
               <button @click="confirmCancel" ref="confirmCancelBtn" class="px-4 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-xl transition-colors font-medium">Cancel</button>
-              <button @click="confirmOk" class="px-4 py-2 text-sm font-semibold text-white bg-rose-500 hover:bg-rose-600 rounded-xl transition-colors">Delete</button>
+              <button @click="confirmOk" :class="['px-4 py-2 text-sm font-semibold text-white rounded-xl transition-colors', confirmDialog.okClass]">{{ confirmDialog.okLabel }}</button>
             </div>
           </div>
         </div>
@@ -2304,11 +2304,11 @@ createApp({
     }
 
     // ── Confirm dialog ───────────────────────────────────────────
-    const confirmDialog = ref({ show: false, title: '', message: '', resolve: null });
+    const confirmDialog = ref({ show: false, title: '', message: '', okLabel: 'Delete', okClass: 'bg-rose-500 hover:bg-rose-600', resolve: null });
     const confirmCancelBtn = ref(null);
-    function showConfirm(title, message = 'This cannot be undone.') {
+    function showConfirm(title, message = 'This cannot be undone.', okLabel = 'Delete', okClass = 'bg-rose-500 hover:bg-rose-600') {
       return new Promise(resolve => {
-        confirmDialog.value = { show: true, title, message, resolve };
+        confirmDialog.value = { show: true, title, message, okLabel, okClass, resolve };
         nextTick(() => confirmCancelBtn.value?.focus());
       });
     }
