@@ -64,7 +64,7 @@ export function useBanner() {
     loading.value = true
     try {
       const ext = file.name.split('.').pop() ?? 'jpg'
-      const path = `banners/${trip.tripId}/${Date.now()}.${ext}`
+      const path = `banners/${trip.tripId.value}/${Date.now()}.${ext}`
       const { data, error } = await supabase.storage
         .from('trip-photos')
         .upload(path, file, { cacheControl: '3600', upsert: true })
