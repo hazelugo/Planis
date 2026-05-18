@@ -326,9 +326,9 @@ async function removeEvent(id: string) { trip.removeEvent(id) }
               </div>
 
               <!-- Category dot with design-system icon -->
-              <div class="relative flex flex-col items-center shrink-0 z-10 mr-4" style="width:24px">
-                <div :class="['w-5 h-5 rounded-full border-2 border-white dark:border-[#0f1117] shadow-sm flex items-center justify-center mt-2.5 shrink-0', CAT_COLORS[event.category]?.dot]">
-                  <svg width="10" height="10" aria-hidden="true"><use :href="`/icons.svg#${CAT_ICONS[event.category]}`"/></svg>
+              <div class="relative flex flex-col items-center shrink-0 z-10 mr-4" style="width:32px">
+                <div :class="['w-8 h-8 rounded-full border-2 border-white dark:border-[#0f1117] shadow-sm flex items-center justify-center mt-2 shrink-0', CAT_COLORS[event.category]?.dot]">
+                  <svg width="18" height="18" aria-hidden="true"><use :href="`/icons.svg#${CAT_ICONS[event.category]}`"/></svg>
                 </div>
               </div>
 
