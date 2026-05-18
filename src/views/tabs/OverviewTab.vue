@@ -58,7 +58,7 @@ async function fetchWeather() {
   if (!trip.state.trip.destination) { weather.value = []; weatherNote.value = ''; return }
   weatherLoading.value = true; weatherError.value = ''; weatherNote.value = ''
   try {
-    const coords = await geocode(trip.state.trip.destination)
+    const coords = destCoords.value ?? await geocode(trip.state.trip.destination)
     if (!coords) { weatherError.value = 'Location not found — try a nearby city or check the spelling.'; weatherLoading.value = false; return }
     const { lat, lon } = coords
     const today = new Date().toISOString().slice(0, 10)
@@ -123,9 +123,55 @@ const tripDuration = computed(() => {
 })
 
 const destEditing = ref(false)
+const destSuggestions = ref<{ label: string; lat: number; lon: number }[]>([])
+const destSearching = ref(false)
+const destCoords = ref<{ lat: number; lon: number } | null>(null)
+let destTimer: ReturnType<typeof setTimeout> | undefined
+let suppressSearch = false
+
 function startDestEdit() {
   destEditing.value = true
   setTimeout(() => (document.getElementById('dest-input') as HTMLInputElement)?.focus(), 0)
+}
+
+function onDestInput() {
+  if (suppressSearch) { suppressSearch = false; return }
+  destCoords.value = null
+  clearTimeout(destTimer)
+  const q = trip.state.trip.destination.trim()
+  if (q.length < 2) { destSuggestions.value = []; return }
+  destSearching.value = true
+  destTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5&lang=en`)
+      const d = await r.json()
+      const seen = new Set<string>()
+      destSuggestions.value = (d.features || [])
+        .filter((f: any) => f.properties.name)
+        .map((f: any) => {
+          const p = f.properties
+          const parts = [p.name]
+          if (p.state && p.state !== p.name) parts.push(p.state)
+          if (p.country) parts.push(p.country)
+          return { label: parts.join(', '), lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] }
+        })
+        .filter((s: any) => { if (seen.has(s.label)) return false; seen.add(s.label); return true })
+        .slice(0, 5)
+    } catch {}
+    destSearching.value = false
+  }, 350)
+}
+
+function selectDest(s: { label: string; lat: number; lon: number }) {
+  suppressSearch = true
+  trip.state.trip.destination = s.label
+  destCoords.value = { lat: s.lat, lon: s.lon }
+  destSuggestions.value = []
+  destEditing.value = false
+}
+
+function onDestBlur() {
+  setTimeout(() => { destSuggestions.value = []; destEditing.value = false }, 200)
 }
 
 const AVATAR_COLORS = ['#6366f1', '#14b8a6', '#f59e0b', '#10b981', '#8b5cf6']
@@ -162,8 +208,8 @@ function fmtDate(d: string) {
 
       <!-- Trip header (3 cols) -->
       <div class="lg:col-span-3 bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-sm p-7 space-y-5">
-        <!-- Destination: click-to-edit -->
-        <div>
+        <!-- Destination: click-to-edit with autocomplete -->
+        <div class="relative">
           <button v-if="!destEditing" @click="startDestEdit"
             class="w-full text-left group flex items-center gap-2 min-w-0">
             <span class="truncate block" :class="trip.state.trip.destination ? 'text-slate-900 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'"
@@ -172,13 +218,29 @@ function fmtDate(d: string) {
             </span>
             <svg class="shrink-0 opacity-0 group-hover:opacity-40 transition-opacity text-slate-400 mt-1" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
-          <input v-else id="dest-input" v-model="trip.state.trip.destination" type="text"
-            placeholder="Where are you going?"
-            @blur="destEditing = false"
-            @keydown.enter="destEditing = false"
-            @keydown.escape="destEditing = false"
-            class="w-full bg-transparent border-none border-b-2 border-teal-400 outline-none pb-1 text-slate-900 dark:text-slate-100 placeholder-slate-300 dark:placeholder-slate-600"
-            style="font-size:1.75rem;font-weight:700;line-height:1.2;letter-spacing:-0.01em" />
+          <template v-else>
+            <div class="flex items-center gap-2">
+              <input id="dest-input" v-model="trip.state.trip.destination" type="text"
+                placeholder="Where are you going?" autocomplete="off"
+                @input="onDestInput"
+                @blur="onDestBlur"
+                @keydown.enter.prevent="destSuggestions[0] ? selectDest(destSuggestions[0]) : (destEditing = false)"
+                @keydown.escape="destSuggestions = []; destEditing = false"
+                class="flex-1 bg-transparent border-none border-b-2 border-teal-400 outline-none pb-1 text-slate-900 dark:text-slate-100 placeholder-slate-300 dark:placeholder-slate-600"
+                style="font-size:1.75rem;font-weight:700;line-height:1.2;letter-spacing:-0.01em" />
+              <svg v-if="destSearching" class="animate-spin text-slate-300 shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            </div>
+            <!-- Suggestions dropdown -->
+            <div v-if="destSuggestions.length"
+              class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1a1f2e] border border-slate-200 dark:border-[#2a3347] rounded-xl shadow-lg z-50 overflow-hidden">
+              <button v-for="s in destSuggestions" :key="s.label"
+                @mousedown.prevent="selectDest(s)"
+                class="w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#1e2535] transition-colors border-b border-slate-50 dark:border-[#2a3347] last:border-0">
+                <svg class="shrink-0 text-slate-300" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span class="truncate">{{ s.label }}</span>
+              </button>
+            </div>
+          </template>
         </div>
 
         <!-- Dates row -->
