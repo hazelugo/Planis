@@ -96,9 +96,42 @@ const syncDot: Record<string, string> = {
   idle:   'bg-emerald-500',
 }
 
-function onBannerPointerDown(_e: PointerEvent) {}
-function onBannerPointerMove(_e: PointerEvent) {}
-function onBannerPointerUp(_e: PointerEvent) {}
+function parsePct(pos: string): [number, number] {
+  const parts = (pos || '50% 50%').split(' ').map(p => parseFloat(p))
+  return [parts[0] ?? 50, parts[1] ?? 50]
+}
+
+function onBannerPointerDown(e: PointerEvent) {
+  if (!repositionMode.value || !trip.state.trip.bannerUrl) return
+  const [posX, posY] = parsePct(trip.state.trip.bannerPosition ?? '50% 50%')
+  dragging.value = true
+  dragStart.value = { x: e.clientX, y: e.clientY, posX, posY }
+  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  e.preventDefault()
+}
+
+function onBannerPointerMove(e: PointerEvent) {
+  if (!dragging.value || !repositionMode.value) return
+  const el = e.currentTarget as HTMLElement
+  const dx = ((dragStart.value.x - e.clientX) / el.offsetWidth) * 100
+  const dy = ((dragStart.value.y - e.clientY) / el.offsetHeight) * 100
+  const newX = Math.max(0, Math.min(100, dragStart.value.posX + dx))
+  const newY = Math.max(0, Math.min(100, dragStart.value.posY + dy))
+  banner.setPosition(newX, newY)
+}
+
+function onBannerPointerUp(e: PointerEvent) {
+  if (!dragging.value) return
+  dragging.value = false
+  try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch {}
+}
+
+async function onBannerFileChange(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  ;(e.target as HTMLInputElement).value = ''
+  await banner.uploadBanner(file)
+}
 </script>
 
 <template>
@@ -157,6 +190,57 @@ function onBannerPointerUp(_e: PointerEvent) {}
       </div>
 
       <div class="hidden lg:flex items-center gap-2 shrink-0">
+
+      <!-- Banner controls (desktop) -->
+      <div v-if="trip.state.trip.bannerUrl" class="flex items-center gap-1 mr-1">
+        <!-- Reposition -->
+        <button
+          @click="repositionMode = !repositionMode"
+          :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all',
+            repositionMode ? 'bg-white/30 text-white' : 'text-white/60 hover:text-white hover:bg-white/20']"
+          :aria-label="repositionMode ? 'Exit reposition mode' : 'Drag to reposition banner'"
+          :title="repositionMode ? 'Click again to finish' : 'Drag to reposition'"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/>
+            <polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/>
+            <line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>
+          </svg>
+        </button>
+        <!-- Try another -->
+        <button
+          @click="banner.tryAnother()"
+          :disabled="banner.loading.value"
+          class="w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/20 disabled:opacity-40 transition-all"
+          aria-label="Load another Pexels photo"
+          title="Try another photo"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+        <!-- Upload -->
+        <button
+          @click="bannerFileInput?.click()"
+          class="w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/20 transition-all"
+          aria-label="Upload custom banner photo"
+          title="Upload your own photo"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </button>
+        <!-- Hidden file input -->
+        <input
+          ref="bannerFileInput"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="onBannerFileChange"
+        />
+      </div>
 
       <!-- My Trips dropdown -->
       <div class="relative">
@@ -257,6 +341,32 @@ function onBannerPointerUp(_e: PointerEvent) {}
 
       <!-- Mobile: briefcase icon + theme toggle -->
       <div class="lg:hidden flex items-center gap-1 shrink-0">
+        <!-- Mobile banner controls -->
+        <template v-if="trip.state.trip.bannerUrl">
+          <button
+            @click="repositionMode = !repositionMode"
+            :class="['w-10 h-10 flex items-center justify-center rounded-xl transition-all',
+              repositionMode ? 'text-white bg-white/30' : 'text-white/70 hover:bg-white/20']"
+            aria-label="Reposition banner"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/>
+              <polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/>
+              <line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>
+            </svg>
+          </button>
+          <button
+            @click="banner.tryAnother()"
+            :disabled="banner.loading.value"
+            class="w-10 h-10 flex items-center justify-center rounded-xl text-white/70 hover:bg-white/20 disabled:opacity-40 transition-all"
+            aria-label="Try another photo"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+          </button>
+        </template>
         <button @click="tripsOpen = !tripsOpen" aria-label="My Trips"
           :class="['relative w-10 h-10 flex items-center justify-center rounded-xl transition-all',
             tripsOpen ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-[#1e2535]' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
