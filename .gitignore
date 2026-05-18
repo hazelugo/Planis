@@ -1,4 +1,17 @@
 .vercel
-
 .notes
 .env*.local
+
+# Vite build output
+dist/
+dist-ssr/
+
+# Node modules
+node_modules/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
