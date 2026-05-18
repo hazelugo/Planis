@@ -98,7 +98,7 @@ const syncDot: Record<string, string> = {
 
 function parsePct(pos: string): [number, number] {
   const parts = (pos || '50% 50%').split(' ').map(p => parseFloat(p))
-  return [parts[0] ?? 50, parts[1] ?? 50]
+  return [parts[0] || 50, parts[1] || 50]
 }
 
 function onBannerPointerDown(e: PointerEvent) {
@@ -123,6 +123,7 @@ function onBannerPointerMove(e: PointerEvent) {
 function onBannerPointerUp(e: PointerEvent) {
   if (!dragging.value) return
   dragging.value = false
+  repositionMode.value = false
   try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId) } catch {}
 }
 
