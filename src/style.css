@@ -23,18 +23,18 @@
   --cat-adventure-400:  #a78bfa;  --cat-adventure-600:  #7c3aed;
 
   /* Neutrals */
-  --bg-app:       #e2e8f0; /* option 2: slate-200 */
+  --bg-app:       #cbd5e1; /* slate-300 — deeper bg, cards lift clearly */
   --bg-surface:   #ffffff;
   --bg-muted:     #f1f5f9;
   --bg-subtle:    #e2e8f0;
   --fg-primary:   #0f172a;
   --fg-body:      #1e293b;
-  --fg-secondary: #475569;
-  --fg-muted:     #64748b;
-  --fg-quiet:     #94a3b8;
-  --fg-faint:     #cbd5e1;
-  --border-soft:  #f1f5f9;
-  --border:       #e2e8f0;
+  --fg-secondary: #334155;
+  --fg-muted:     #475569;
+  --fg-quiet:     #64748b;
+  --fg-faint:     #94a3b8;
+  --border-soft:  #dde3ed;
+  --border:       #b8c4d4;
 
   /* Status */
   --success: #059669;  --success-bg: #ecfdf5;
