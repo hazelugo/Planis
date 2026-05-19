@@ -119,7 +119,7 @@ async function removePayment(id: string) {
       </div>
       <div class="px-6 pb-6">
         <div v-if="trip.state.friends.length < 2" class="py-10 text-center">
-          <svg width="36" height="36" class="mb-2 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-split"/></svg>
+          <svg width="36" height="36" class="block mx-auto mb-2 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-split"/></svg>
           <p class="text-sm text-slate-400 font-medium">Add at least 2 members to split costs</p>
         </div>
         <div v-else class="space-y-5 pt-4">
@@ -228,7 +228,7 @@ async function removePayment(id: string) {
         </button>
       </div>
       <div v-if="!trip.state.friends.length" class="py-6 text-center">
-        <svg width="36" height="36" class="mb-2 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-crew"/></svg>
+        <svg width="36" height="36" class="block mx-auto mb-2 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-crew"/></svg>
         <p class="text-sm text-slate-400 font-medium">Add your crew to get started</p>
       </div>
       <div v-else class="grid grid-cols-2 gap-2.5">
@@ -251,11 +251,11 @@ async function removePayment(id: string) {
     <div class="bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-6 space-y-4">
       <h2 class="eyebrow">Who Owes What</h2>
       <div v-if="!trip.state.payments.length" class="py-10 text-center">
-        <svg width="36" height="36" class="mb-2 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-spending"/></svg>
+        <svg width="36" height="36" class="block mx-auto mb-2 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-spending"/></svg>
         <p class="text-sm text-slate-400 font-medium">Log expenses to see who owes what</p>
       </div>
       <div v-else-if="!trip.settlements.length" class="py-8 text-center rounded-2xl bg-emerald-50 dark:bg-emerald-900/20">
-        <svg width="48" height="48" class="mb-3 text-emerald-500 dark:text-emerald-400" aria-hidden="true"><use href="/icons.svg#i-empty-settled"/></svg>
+        <svg width="48" height="48" class="block mx-auto mb-3 text-emerald-500 dark:text-emerald-400" aria-hidden="true"><use href="/icons.svg#i-empty-settled"/></svg>
         <p class="text-base font-bold text-emerald-700 dark:text-emerald-400">All settled up!</p>
         <p class="text-sm text-emerald-600 dark:text-emerald-500 mt-1">Everyone's square — time to enjoy the trip.</p>
       </div>

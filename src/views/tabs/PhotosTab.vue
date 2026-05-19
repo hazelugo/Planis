@@ -98,7 +98,7 @@ async function sharePhoto(photo: Photo) {
             <p class="text-sm text-teal-400 font-medium">Uploading…</p>
           </div>
           <div v-else-if="!trip.state.photos.length" class="flex flex-col items-center gap-3">
-            <svg width="48" height="48" class="text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-photos"/></svg>
+            <svg width="48" height="48" class="block mx-auto text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-photos"/></svg>
             <div>
               <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">Your wall is waiting</p>
               <p class="text-xs text-slate-400 mt-1">Drop the first photo from the trip — this wall is yours to fill.</p>

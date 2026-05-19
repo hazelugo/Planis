@@ -69,7 +69,7 @@ const slices = computed(() => {
 <template>
   <div class="space-y-5 anim-fade-up">
     <div v-if="!grand" class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline p-16 text-center">
-      <svg width="48" height="48" class="mb-3 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-spending"/></svg>
+      <svg width="48" height="48" class="block mx-auto mb-3 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-spending"/></svg>
       <p class="text-sm font-semibold text-slate-600 dark:text-slate-400">No spending data yet</p>
       <p class="text-xs text-slate-400 mt-1">Add events in the Itinerary tab to see breakdowns here.</p>
     </div>

@@ -354,7 +354,7 @@ function fmtDate(d: string) {
 
       <!-- Empty summary placeholder -->
       <div v-else class="lg:col-span-2 rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline p-6 flex flex-col items-center justify-center text-center gap-3">
-        <svg width="48" height="48" class="text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-itinerary"/></svg>
+        <svg width="48" height="48" class="block mx-auto text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-itinerary"/></svg>
         <p class="text-sm font-semibold text-slate-600 dark:text-slate-400">Your trip summary will appear here</p>
         <p class="text-xs text-slate-400 leading-relaxed">Add your destination and dates<br>to get started</p>
       </div>
