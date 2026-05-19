@@ -138,7 +138,7 @@ async function onBannerFileChange(e: Event) {
   <header
     class="relative shrink-0 transition-[height] duration-300"
     :class="!trip.state.trip.bannerUrl
-      ? 'bg-white dark:bg-[#1a1f2e] border-b border-slate-100 dark:border-[#2a3347]'
+      ? 'bg-surface border-b border-slate-100 dark:border-hairline'
       : repositionMode ? 'cursor-grab' : 'cursor-default'"
     :style="trip.state.trip.bannerUrl ? 'height: 180px' : ''"
     @pointerdown="onBannerPointerDown"
@@ -251,22 +251,22 @@ async function onBannerFileChange(e: Event) {
                 ? 'bg-white/30 border-white/30 text-white'
                 : 'bg-white/10 border-white/20 text-white/80 hover:bg-white/20'
               : tripsOpen
-                ? 'bg-teal-50 dark:bg-[#1e2535] border-teal-200 dark:border-teal-700 text-teal-700 dark:text-teal-400'
-                : 'bg-white dark:bg-[#1a1f2e] border-slate-200 dark:border-[#2a3347] text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+                ? 'bg-teal-50 dark:bg-inset border-teal-200 dark:border-teal-700 text-teal-700 dark:text-teal-400'
+                : 'bg-surface border-slate-200 dark:border-hairline text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
           My Trips
           <span v-if="trip.tripIndex.length > 1" class="bg-teal-100 dark:bg-teal-800/60 text-teal-700 dark:text-teal-300 rounded-full px-1.5 text-[10px] font-bold leading-none py-0.5">{{ trip.tripIndex.length }}</span>
         </button>
 
         <Transition name="fade">
-          <div v-if="tripsOpen" class="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-xl shadow-slate-200/60 dark:shadow-none z-50 overflow-hidden">
-            <div class="px-4 pt-4 pb-2 border-b border-slate-50 dark:border-[#2a3347]">
+          <div v-if="tripsOpen" class="absolute right-0 top-full mt-2 w-72 bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-xl shadow-slate-200/60 dark:shadow-none z-50 overflow-hidden">
+            <div class="px-4 pt-4 pb-2 border-b border-slate-50 dark:border-hairline">
               <p class="eyebrow">My Trips</p>
             </div>
             <div class="max-h-60 overflow-y-auto">
               <div v-for="t in trip.tripIndex" :key="t.id"
                 :class="['flex items-center gap-3 px-4 py-3 transition-colors',
-                  t.id === trip.tripId ? 'bg-teal-50/60 dark:bg-teal-900/10' : 'hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+                  t.id === trip.tripId ? 'bg-teal-50/60 dark:bg-teal-900/10' : 'hover:bg-slate-50 dark:hover:bg-inset']">
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
                     {{ t.name || 'Untitled Trip' }}
@@ -279,13 +279,13 @@ async function onBannerFileChange(e: Event) {
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
                   <button v-if="t.id !== trip.tripId" @click="switchTrip(t.id)"
-                    class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-[#253047] transition-all"
+                    class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-lift transition-all"
                     aria-label="Switch to this trip">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                   </button>
                   <button @click="copyTripLink(t.id)"
                     :class="['w-7 h-7 flex items-center justify-center rounded-lg transition-all',
-                      copiedTripId === t.id ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-[#253047]' : 'text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-[#253047]']"
+                      copiedTripId === t.id ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-lift' : 'text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-lift']"
                     :aria-label="copiedTripId === t.id ? 'Copied!' : 'Copy link'">
                     <svg v-if="copiedTripId !== t.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                     <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -298,9 +298,9 @@ async function onBannerFileChange(e: Event) {
               </div>
               <div v-if="!trip.tripIndex.length" class="px-4 py-6 text-center text-sm text-slate-400 italic">No trips saved yet.</div>
             </div>
-            <div class="px-4 py-3 border-t border-slate-100 dark:border-[#2a3347]">
+            <div class="px-4 py-3 border-t border-slate-100 dark:border-hairline">
               <button @click="startNewTrip"
-                class="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-[#1e2535] transition-colors">
+                class="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-inset transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 New Trip
               </button>
@@ -323,7 +323,7 @@ async function onBannerFileChange(e: Event) {
         :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all',
           trip.state.trip.bannerUrl
             ? linkCopied ? 'text-white bg-white/20' : 'text-white/70 hover:text-white hover:bg-white/20'
-            : linkCopied ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-[#1e2535]' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+            : linkCopied ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-inset' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-inset']">
         <svg v-if="!linkCopied" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
         <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </button>
@@ -333,7 +333,7 @@ async function onBannerFileChange(e: Event) {
         :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all',
           trip.state.trip.bannerUrl
             ? 'text-white/70 hover:text-white/90 hover:bg-white/20'
-            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-inset']">
         <svg v-if="ui.darkMode" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
         <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
@@ -369,7 +369,7 @@ async function onBannerFileChange(e: Event) {
         </template>
         <button @click="tripsOpen = !tripsOpen" aria-label="My Trips"
           :class="['relative w-10 h-10 flex items-center justify-center rounded-xl transition-all',
-            tripsOpen ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-[#1e2535]' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+            tripsOpen ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-inset' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
           <span v-if="trip.tripIndex.length > 1" class="absolute top-1.5 right-1.5 w-3.5 h-3.5 flex items-center justify-center bg-teal-500 text-white text-[9px] font-bold rounded-full leading-none">{{ trip.tripIndex.length }}</span>
         </button>
@@ -377,7 +377,7 @@ async function onBannerFileChange(e: Event) {
           :class="['w-10 h-10 flex items-center justify-center rounded-xl transition-all',
             trip.state.trip.bannerUrl
               ? 'text-white/70 hover:bg-white/20'
-              : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+              : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']">
           <svg v-if="ui.darkMode" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         </button>
@@ -391,16 +391,16 @@ async function onBannerFileChange(e: Event) {
       <div v-if="tripsOpen" class="lg:hidden fixed inset-0 z-40 bg-black/20 backdrop-blur-sm" @click="tripsOpen = false" aria-hidden="true"></div>
     </Transition>
     <Transition name="sheet-up">
-      <div v-if="tripsOpen" class="lg:hidden fixed inset-x-0 bottom-0 z-50 bg-white dark:bg-[#1a1f2e] rounded-t-2xl border-t border-slate-100 dark:border-[#2a3347] shadow-xl overflow-hidden" style="padding-bottom:env(safe-area-inset-bottom,0px)">
-        <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 dark:border-[#2a3347]">
+      <div v-if="tripsOpen" class="lg:hidden fixed inset-x-0 bottom-0 z-50 bg-surface rounded-t-2xl border-t border-slate-100 dark:border-hairline shadow-xl overflow-hidden" style="padding-bottom:env(safe-area-inset-bottom,0px)">
+        <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100 dark:border-hairline">
           <p class="text-sm font-semibold text-slate-800 dark:text-slate-200">My Trips</p>
-          <button @click="tripsOpen = false" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1e2535]">
+          <button @click="tripsOpen = false" class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 dark:hover:bg-inset">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
         <div class="max-h-72 overflow-y-auto">
           <div v-for="t in trip.tripIndex" :key="t.id"
-            :class="['flex items-center gap-3 px-5 py-3.5 transition-colors', t.id === trip.tripId ? 'bg-teal-50/60 dark:bg-teal-900/10' : 'hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+            :class="['flex items-center gap-3 px-5 py-3.5 transition-colors', t.id === trip.tripId ? 'bg-teal-50/60 dark:bg-teal-900/10' : 'hover:bg-slate-50 dark:hover:bg-inset']">
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
                 {{ t.name || 'Untitled Trip' }}
@@ -413,12 +413,12 @@ async function onBannerFileChange(e: Event) {
             </div>
             <div class="flex items-center gap-1 shrink-0">
               <button v-if="t.id !== trip.tripId" @click="switchTrip(t.id)"
-                class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-[#253047] transition-all">
+                class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-lift transition-all">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               </button>
               <button @click="copyTripLink(t.id)"
                 :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all',
-                  copiedTripId === t.id ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-[#253047]' : 'text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-[#253047]']">
+                  copiedTripId === t.id ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-lift' : 'text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-lift']">
                 <svg v-if="copiedTripId !== t.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>
@@ -430,9 +430,9 @@ async function onBannerFileChange(e: Event) {
           </div>
           <div v-if="!trip.tripIndex.length" class="px-5 py-8 text-center text-sm text-slate-400 italic">No trips saved yet.</div>
         </div>
-        <div class="px-5 py-4 border-t border-slate-100 dark:border-[#2a3347]">
+        <div class="px-5 py-4 border-t border-slate-100 dark:border-hairline">
           <button @click="startNewTrip"
-            class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-[#1e2535] transition-colors">
+            class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-inset transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             New Trip
           </button>

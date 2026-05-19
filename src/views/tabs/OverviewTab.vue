@@ -207,7 +207,7 @@ function fmtDate(d: string) {
     <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
 
       <!-- Trip header (3 cols) -->
-      <div class="lg:col-span-3 bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-sm p-7 space-y-5">
+      <div class="lg:col-span-3 bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-7 space-y-5">
         <!-- Destination: click-to-edit with autocomplete -->
         <div class="relative">
           <button v-if="!destEditing" @click="startDestEdit"
@@ -232,10 +232,10 @@ function fmtDate(d: string) {
             </div>
             <!-- Suggestions dropdown -->
             <div v-if="destSuggestions.length"
-              class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1a1f2e] border border-slate-200 dark:border-[#2a3347] rounded-xl shadow-lg z-50 overflow-hidden">
+              class="absolute top-full left-0 right-0 mt-2 bg-surface border border-slate-200 dark:border-hairline rounded-xl shadow-lg z-50 overflow-hidden">
               <button v-for="s in destSuggestions" :key="s.label"
                 @mousedown.prevent="selectDest(s)"
-                class="w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#1e2535] transition-colors border-b border-slate-50 dark:border-[#2a3347] last:border-0">
+                class="w-full text-left flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-inset transition-colors border-b border-slate-50 dark:border-hairline last:border-0">
                 <svg class="shrink-0 text-slate-300" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                 <span class="truncate">{{ s.label }}</span>
               </button>
@@ -259,7 +259,7 @@ function fmtDate(d: string) {
         </div>
 
         <!-- Duration + budget -->
-        <div class="flex items-center gap-3 pt-1 border-t border-slate-100 dark:border-[#2a3347]">
+        <div class="flex items-center gap-3 pt-1 border-t border-slate-100 dark:border-hairline">
           <div class="flex items-center gap-1.5 shrink-0">
             <span v-if="tripDuration > 0" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
               {{ tripDuration }} days
@@ -318,7 +318,7 @@ function fmtDate(d: string) {
       </div>
 
       <!-- Empty summary placeholder -->
-      <div v-else class="lg:col-span-2 rounded-2xl border-2 border-dashed border-slate-200 dark:border-[#2a3347] p-6 flex flex-col items-center justify-center text-center gap-3">
+      <div v-else class="lg:col-span-2 rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline p-6 flex flex-col items-center justify-center text-center gap-3">
         <p class="text-4xl">🗺️</p>
         <p class="text-sm font-semibold text-slate-600 dark:text-slate-400">Your trip summary will appear here</p>
         <p class="text-xs text-slate-400 leading-relaxed">Add your destination and dates<br>to get started</p>
@@ -327,7 +327,7 @@ function fmtDate(d: string) {
 
     <!-- Stats strip -->
     <div v-if="trip.state.trip.destination || trip.state.friends.length || trip.state.events.length || tripDuration > 0"
-      class="bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-sm divide-x divide-slate-100 dark:divide-[#2a3347] grid grid-cols-2 lg:grid-cols-4 overflow-hidden">
+      class="bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm divide-x divide-slate-100 dark:divide-hairline grid grid-cols-2 lg:grid-cols-4 overflow-hidden">
 
       <!-- Travelers -->
       <div class="px-5 py-4 flex flex-col gap-1.5">
@@ -372,7 +372,7 @@ function fmtDate(d: string) {
     </div>
 
     <!-- Weather widget -->
-    <div v-if="trip.state.trip.destination" class="bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-sm px-6 pt-5 pb-6">
+    <div v-if="trip.state.trip.destination" class="bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm px-6 pt-5 pb-6">
       <div class="flex items-center justify-between mb-5">
         <div>
           <h2 class="eyebrow">Weather Forecast</h2>
@@ -392,7 +392,7 @@ function fmtDate(d: string) {
         </p>
         <div class="flex gap-2.5" style="min-width:max-content">
           <div v-for="day in weather" :key="day.date"
-            class="flex flex-col items-center gap-1.5 px-3.5 py-3 bg-slate-50 dark:bg-[#1e2535] rounded-2xl min-w-[76px]">
+            class="flex flex-col items-center gap-1.5 px-3.5 py-3 bg-slate-50 dark:bg-inset rounded-2xl min-w-[76px]">
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{{ fmtWeatherDate(day.date) }}</p>
             <span class="text-3xl leading-none">{{ weatherEmoji(day.code) }}</span>
             <p class="text-[10px] text-slate-400 text-center leading-snug">{{ WMO[day.code] || '' }}</p>

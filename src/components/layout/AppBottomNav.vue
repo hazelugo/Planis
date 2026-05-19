@@ -12,7 +12,7 @@ const tabs = [
 </script>
 
 <template>
-  <nav class="lg:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-[#1a1f2e] border-t border-slate-100 dark:border-[#2a3347] flex z-40 pb-[env(safe-area-inset-bottom)]">
+  <nav class="lg:hidden fixed bottom-0 inset-x-0 bg-surface border-t border-slate-100 dark:border-hairline flex z-40 pb-[env(safe-area-inset-bottom)]">
     <button
       v-for="tab in tabs"
       :key="tab.id"

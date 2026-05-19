@@ -68,13 +68,13 @@ const slices = computed(() => {
 
 <template>
   <div class="space-y-5 anim-fade-up">
-    <div v-if="!grand" class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-[#2a3347] p-16 text-center">
+    <div v-if="!grand" class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline p-16 text-center">
       <p class="text-4xl mb-3 select-none">💸</p>
       <p class="text-sm font-semibold text-slate-600 dark:text-slate-400">No spending data yet</p>
       <p class="text-xs text-slate-400 mt-1">Add events in the Itinerary tab to see breakdowns here.</p>
     </div>
 
-    <div v-else class="bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-sm p-6">
+    <div v-else class="bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-6">
       <div class="flex items-baseline justify-between mb-6">
         <p class="eyebrow">Spending breakdown</p>
         <span class="text-xs text-slate-400">{{ trip.state.events.length }} events</span>
@@ -125,7 +125,7 @@ const slices = computed(() => {
             class="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors text-left"
             :class="selected === b.key
               ? 'ring-1 ring-offset-0'
-              : 'hover:bg-slate-50 dark:hover:bg-[#1e2535]'"
+              : 'hover:bg-slate-50 dark:hover:bg-inset'"
             :style="selected === b.key ? `background:${b.light};ring-color:${b.color}` : ''"
             @mouseenter="hovered = b.key"
             @mouseleave="hovered = null"
@@ -153,9 +153,9 @@ const slices = computed(() => {
 
     <!-- Drill-down expense list -->
     <Transition name="fade">
-      <div v-if="selectedBreakdown" class="bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-sm overflow-hidden">
+      <div v-if="selectedBreakdown" class="bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm overflow-hidden">
         <!-- Header -->
-        <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-[#2a3347]"
+        <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-100 dark:border-hairline"
           :style="`background:${ui.darkMode ? selectedBreakdown.darkBg : selectedBreakdown.light}`">
           <span class="w-3 h-3 rounded-full shrink-0" :style="`background:${selectedBreakdown.color}`"></span>
           <span class="text-sm font-bold text-slate-800 dark:text-slate-100">{{ selectedBreakdown.key }}</span>
@@ -166,7 +166,7 @@ const slices = computed(() => {
           </button>
         </div>
         <!-- Events -->
-        <div class="divide-y divide-slate-50 dark:divide-[#2a3347]">
+        <div class="divide-y divide-slate-50 dark:divide-hairline">
           <div v-for="e in selectedBreakdown.events" :key="e.id"
             class="flex items-center gap-4 px-6 py-3.5">
             <div class="flex-1 min-w-0">
@@ -174,9 +174,9 @@ const slices = computed(() => {
               <p v-if="e.date" class="text-xs text-slate-400 mt-0.5">
                 {{ new Date(e.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
                 <span v-if="e.time"> · {{ e.time }}</span>
-                <span v-if="e.perPerson" class="ml-1.5 px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#1e2535] text-slate-500 text-[10px] font-semibold">Per person</span>
+                <span v-if="e.perPerson" class="ml-1.5 px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-inset text-slate-500 text-[10px] font-semibold">Per person</span>
               </p>
-              <p v-if="e.notes" class="text-xs text-slate-400 mt-1 line-clamp-1 pl-2 border-l-2 border-slate-100 dark:border-[#2a3347]">{{ e.notes }}</p>
+              <p v-if="e.notes" class="text-xs text-slate-400 mt-1 line-clamp-1 pl-2 border-l-2 border-slate-100 dark:border-hairline">{{ e.notes }}</p>
             </div>
             <div class="text-right shrink-0">
               <p class="text-sm font-bold text-slate-700 dark:text-slate-300">${{ fmt(e.perPerson ? e.cost * totalParticipants : e.cost) }}</p>

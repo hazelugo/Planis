@@ -127,7 +127,7 @@ function fmtDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-const inputCls = 'w-full px-3 py-2.5 border border-slate-200 dark:border-[#2a3347] rounded-xl text-sm bg-white dark:bg-[#1e2535] text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500'
+const inputCls = 'w-full px-3 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500'
 
 function addEvent() {
   if (!newEvent.value.name.trim()) return
@@ -144,7 +144,7 @@ function removeEvent(id: string) { trip.removeEvent(id) }
   <div class="space-y-5 anim-fade-up">
 
     <!-- Add event form -->
-    <div class="bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-sm p-6">
+    <div class="bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-6">
       <label for="event-name" class="sr-only">Event name</label>
       <input id="event-name" v-model="newEvent.name" @keydown.enter="addEvent" type="text" maxlength="120"
         placeholder="What's the plan? e.g. Eiffel Tower visit"
@@ -168,11 +168,11 @@ function removeEvent(id: string) { trip.removeEvent(id) }
           <label class="eyebrow block mb-1.5">Cost Type</label>
           <div class="flex gap-1.5 h-[42px]">
             <button @click="newEvent.perPerson = false"
-              :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', !newEvent.perPerson ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'border-slate-200 dark:border-[#2a3347] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+              :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', !newEvent.perPerson ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']">
               Flat Rate
             </button>
             <button @click="newEvent.perPerson = true"
-              :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', newEvent.perPerson ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'border-slate-200 dark:border-[#2a3347] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+              :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', newEvent.perPerson ? 'bg-teal-600 text-white border-teal-600 shadow-sm' : 'border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']">
               Per Person
             </button>
           </div>
@@ -193,7 +193,7 @@ function removeEvent(id: string) { trip.removeEvent(id) }
       <div class="mb-4">
         <label class="eyebrow block mb-1.5">Notes <span class="normal-case font-normal text-slate-300">(optional)</span></label>
         <textarea v-model="newEvent.notes" rows="2" placeholder="Booking refs, addresses, reminders…" maxlength="500"
-          class="w-full px-3 py-2.5 border border-slate-200 dark:border-[#2a3347] rounded-xl text-sm bg-white dark:bg-[#1e2535] text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
+          class="w-full px-3 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
       </div>
 
       <div class="mb-5">
@@ -212,15 +212,15 @@ function removeEvent(id: string) { trip.removeEvent(id) }
     </div>
 
     <!-- Empty state -->
-    <div v-if="!trip.state.events.length" class="bg-white dark:bg-[#1a1f2e] rounded-2xl border-2 border-dashed border-slate-200 dark:border-[#2a3347] py-16 px-8 text-center">
+    <div v-if="!trip.state.events.length" class="bg-surface rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline py-16 px-8 text-center">
       <div class="flex flex-col items-center gap-0 mb-6">
-        <div class="w-px h-8 border-l-2 border-dashed border-slate-200 dark:border-[#2a3347]"></div>
-        <div class="w-3 h-3 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1a1f2e]"></div>
-        <div class="w-px h-6 border-l-2 border-dashed border-slate-200 dark:border-[#2a3347]"></div>
+        <div class="w-px h-8 border-l-2 border-dashed border-slate-200 dark:border-hairline"></div>
+        <div class="w-3 h-3 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 bg-surface"></div>
+        <div class="w-px h-6 border-l-2 border-dashed border-slate-200 dark:border-hairline"></div>
         <div class="text-4xl my-2 select-none">🗺️</div>
-        <div class="w-px h-6 border-l-2 border-dashed border-slate-200 dark:border-[#2a3347]"></div>
-        <div class="w-3 h-3 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 bg-white dark:bg-[#1a1f2e]"></div>
-        <div class="w-px h-8 border-l-2 border-dashed border-slate-200 dark:border-[#2a3347]"></div>
+        <div class="w-px h-6 border-l-2 border-dashed border-slate-200 dark:border-hairline"></div>
+        <div class="w-3 h-3 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 bg-surface"></div>
+        <div class="w-px h-8 border-l-2 border-dashed border-slate-200 dark:border-hairline"></div>
       </div>
       <p class="text-xl font-bold text-slate-600 dark:text-slate-400">Your adventure is waiting</p>
       <p class="text-sm text-slate-400 mt-2 max-w-xs mx-auto leading-relaxed">Start adding flights, dinners, hikes, and hidden gems. Every great trip begins with a plan.</p>
@@ -230,20 +230,20 @@ function removeEvent(id: string) { trip.removeEvent(id) }
     <div v-else class="space-y-4">
 
       <!-- Search / filter toolbar -->
-      <div class="bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-sm px-4 py-3 space-y-3">
+      <div class="bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm px-4 py-3 space-y-3">
         <div class="flex items-center gap-2">
           <!-- Text search -->
           <div class="flex-1 relative">
             <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input v-model="searchText" type="text" placeholder="Search by name or notes…"
-              class="w-full pl-9 pr-3 py-2 border border-slate-200 dark:border-[#2a3347] rounded-xl text-sm bg-white dark:bg-[#1e2535] text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              class="w-full pl-9 pr-3 py-2 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500" />
           </div>
           <!-- Filter toggle -->
           <button @click="showFilters = !showFilters"
             :class="['flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all shrink-0',
               showFilters || costMin !== '' || costMax !== ''
-                ? 'bg-teal-50 dark:bg-[#1e2535] border-teal-200 dark:border-teal-700 text-teal-700 dark:text-teal-400'
-                : 'border-slate-200 dark:border-[#2a3347] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1e2535]']">
+                ? 'bg-teal-50 dark:bg-inset border-teal-200 dark:border-teal-700 text-teal-700 dark:text-teal-400'
+                : 'border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
             Cost
           </button>
@@ -262,13 +262,13 @@ function removeEvent(id: string) { trip.removeEvent(id) }
             <div class="relative flex-1">
               <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
               <input v-model.number="costMin" type="number" min="0" placeholder="Min"
-                class="w-full pl-6 pr-2 py-1.5 border border-slate-200 dark:border-[#2a3347] rounded-lg text-xs bg-white dark:bg-[#1e2535] text-slate-700 dark:text-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                class="w-full pl-6 pr-2 py-1.5 border border-slate-200 dark:border-hairline rounded-lg text-xs bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
             <span class="text-xs text-slate-300">—</span>
             <div class="relative flex-1">
               <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
               <input v-model.number="costMax" type="number" min="0" placeholder="Max"
-                class="w-full pl-6 pr-2 py-1.5 border border-slate-200 dark:border-[#2a3347] rounded-lg text-xs bg-white dark:bg-[#1e2535] text-slate-700 dark:text-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+                class="w-full pl-6 pr-2 py-1.5 border border-slate-200 dark:border-hairline rounded-lg text-xs bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
           </div>
         </Transition>
@@ -280,7 +280,7 @@ function removeEvent(id: string) { trip.removeEvent(id) }
       </div>
 
       <!-- No results -->
-      <div v-if="!groupedEvents.length" class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-[#2a3347] p-12 text-center">
+      <div v-if="!groupedEvents.length" class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline p-12 text-center">
         <p class="text-3xl mb-3 select-none">🔍</p>
         <p class="text-sm font-semibold text-slate-600 dark:text-slate-400">No events match your search</p>
         <button @click="clearFilters" class="mt-3 text-xs text-teal-600 dark:text-teal-400 font-semibold hover:underline">Clear filters</button>
@@ -289,7 +289,7 @@ function removeEvent(id: string) { trip.removeEvent(id) }
       <!-- Grouped by day -->
       <div v-else class="space-y-8">
         <div v-for="group in groupedEvents" :key="group.date || '__none__'">
-          <div class="flex items-baseline justify-between mb-4 pb-3 border-b border-slate-100 dark:border-[#2a3347]">
+          <div class="flex items-baseline justify-between mb-4 pb-3 border-b border-slate-100 dark:border-hairline">
             <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 leading-none">{{ group.label }}</h3>
             <span class="text-xs font-semibold text-slate-400 ml-3 whitespace-nowrap">${{ fmt(group.total) }}</span>
           </div>
@@ -300,7 +300,7 @@ function removeEvent(id: string) { trip.removeEvent(id) }
 
                 <!-- Inline edit -->
                 <div v-if="editingId === event.id" :key="event.id + '-edit'"
-                  class="ml-10 bg-white dark:bg-[#1a1f2e] rounded-2xl border-2 border-teal-300 dark:border-teal-700 shadow-md p-5 mb-2">
+                  class="ml-10 bg-surface rounded-2xl border-2 border-teal-300 dark:border-teal-700 shadow-md p-5 mb-2">
                   <p class="eyebrow text-teal-600 dark:text-teal-400 mb-4">Editing Event</p>
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div class="sm:col-span-2">
@@ -324,8 +324,8 @@ function removeEvent(id: string) { trip.removeEvent(id) }
                     <div>
                       <label class="eyebrow block mb-1.5">Cost Type</label>
                       <div class="flex gap-1.5 h-[42px]">
-                        <button @click="editForm.perPerson = false" :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', !editForm.perPerson ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-200 dark:border-[#2a3347] text-slate-500']">Flat Rate</button>
-                        <button @click="editForm.perPerson = true" :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', editForm.perPerson ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-200 dark:border-[#2a3347] text-slate-500']">Per Person</button>
+                        <button @click="editForm.perPerson = false" :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', !editForm.perPerson ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-200 dark:border-hairline text-slate-500']">Flat Rate</button>
+                        <button @click="editForm.perPerson = true" :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', editForm.perPerson ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-200 dark:border-hairline text-slate-500']">Per Person</button>
                       </div>
                     </div>
                     <div>
@@ -337,7 +337,7 @@ function removeEvent(id: string) { trip.removeEvent(id) }
                     </div>
                     <div class="sm:col-span-2">
                       <label class="eyebrow block mb-1.5">Notes</label>
-                      <textarea v-model="editForm.notes" rows="2" class="w-full px-3 py-2.5 border border-slate-200 dark:border-[#2a3347] rounded-xl text-sm bg-white dark:bg-[#1e2535] text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
+                      <textarea v-model="editForm.notes" rows="2" class="w-full px-3 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
                     </div>
                     <div class="sm:col-span-2">
                       <label class="eyebrow block mb-1.5">Link <span class="normal-case font-normal text-slate-300">(optional)</span></label>
@@ -349,7 +349,7 @@ function removeEvent(id: string) { trip.removeEvent(id) }
                   </div>
                   <div class="flex gap-2 mt-4">
                     <button @click="saveEdit" :disabled="!editForm.name.trim()" class="px-5 py-2 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 disabled:opacity-40 transition-colors shadow-sm">Save Changes</button>
-                    <button @click="cancelEdit" class="px-5 py-2 bg-slate-100 dark:bg-[#253047] text-slate-600 dark:text-slate-300 text-sm font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-[#2a3347] transition-colors">Cancel</button>
+                    <button @click="cancelEdit" class="px-5 py-2 bg-slate-100 dark:bg-lift text-slate-600 dark:text-slate-300 text-sm font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-[#2a3347] transition-colors">Cancel</button>
                   </div>
                 </div>
 
@@ -382,7 +382,7 @@ function removeEvent(id: string) { trip.removeEvent(id) }
                   </div>
 
                   <!-- Content -->
-                  <div class="flex-1 min-w-0 bg-white dark:bg-[#1a1f2e] rounded-2xl border border-slate-100 dark:border-[#2a3347] shadow-sm px-4 py-3.5 hover:border-slate-200 hover:shadow-md transition-all mb-1">
+                  <div class="flex-1 min-w-0 bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm px-4 py-3.5 hover:border-slate-200 hover:shadow-md transition-all mb-1">
                     <div class="flex items-start gap-2">
                       <div class="flex-1 min-w-0">
                         <a v-if="event.url" :href="event.url" target="_blank" rel="noopener"
@@ -391,9 +391,9 @@ function removeEvent(id: string) { trip.removeEvent(id) }
                         <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                           <span v-if="event.time" class="text-xs text-slate-400">{{ event.time }}</span>
                           <span :class="['text-[11px] px-2 py-0.5 rounded-full font-semibold', CAT_COLORS[event.category]?.badge]">{{ event.category }}</span>
-                          <span v-if="event.perPerson" class="text-[11px] bg-slate-100 dark:bg-[#1e2535] text-slate-500 px-2 py-0.5 rounded-full">Per person</span>
+                          <span v-if="event.perPerson" class="text-[11px] bg-slate-100 dark:bg-inset text-slate-500 px-2 py-0.5 rounded-full">Per person</span>
                         </div>
-                        <p v-if="event.notes" class="text-xs text-slate-400 mt-2 leading-relaxed pl-3 border-l-2 border-slate-100 dark:border-[#2a3347] line-clamp-2">{{ event.notes }}</p>
+                        <p v-if="event.notes" class="text-xs text-slate-400 mt-2 leading-relaxed pl-3 border-l-2 border-slate-100 dark:border-hairline line-clamp-2">{{ event.notes }}</p>
                       </div>
                       <div class="text-right shrink-0 ml-2">
                         <p class="font-bold text-slate-700 dark:text-slate-300 text-sm">${{ fmt(event.perPerson ? event.cost * totalParticipants : event.cost) }}</p>

@@ -27,10 +27,10 @@ const daysUntil = computed(() => {
 </script>
 
 <template>
-  <aside class="hidden lg:flex flex-col w-60 bg-white dark:bg-[#1a1f2e] border-r border-slate-100 dark:border-[#2a3347] shrink-0 overflow-y-auto">
+  <aside class="hidden lg:flex flex-col w-60 bg-surface border-r border-slate-100 dark:border-hairline shrink-0 overflow-y-auto">
 
     <!-- Planis wordmark -->
-    <div class="px-5 pt-6 pb-5 border-b border-slate-100 dark:border-[#2a3347]">
+    <div class="px-5 pt-6 pb-5 border-b border-slate-100 dark:border-hairline">
       <div class="flex flex-col gap-1">
         <img :src="ui.darkMode ? '/logo-dark.svg' : '/logo.svg'" alt="Planis" class="h-8 w-auto" />
         <p class="text-xs text-slate-400 truncate max-w-[180px]">{{ trip.state.trip.destination || 'Plan & Budget' }}</p>
@@ -47,8 +47,8 @@ const daysUntil = computed(() => {
         :class="[
           'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 text-left',
           currentTab === tab.id
-            ? 'bg-teal-50 dark:bg-[#1e2535] text-teal-700 dark:text-[#2dd4bf]'
-            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#1e2535] hover:text-slate-700 dark:hover:text-slate-200'
+            ? 'bg-teal-50 dark:bg-inset text-teal-700 dark:text-[#2dd4bf]'
+            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset hover:text-slate-700 dark:hover:text-slate-200'
         ]"
       >
         <span class="shrink-0 w-[17px] h-[17px]" :class="currentTab === tab.id ? 'text-teal-600 dark:text-[#2dd4bf]' : 'text-slate-400 dark:text-slate-500'">
@@ -59,7 +59,7 @@ const daysUntil = computed(() => {
     </nav>
 
     <!-- Countdown widget -->
-    <div v-if="daysUntil !== null && daysUntil > 0" class="m-3 p-4 rounded-2xl bg-teal-50 dark:bg-[#1e2535] border border-teal-100 dark:border-[#2a3347]">
+    <div v-if="daysUntil !== null && daysUntil > 0" class="m-3 p-4 rounded-2xl bg-teal-50 dark:bg-inset border border-teal-100 dark:border-hairline">
       <p class="text-[10px] text-teal-500 font-bold uppercase tracking-widest">Departing in</p>
       <p class="text-3xl font-extrabold text-teal-700 dark:text-[#2dd4bf] mt-0.5 leading-none">
         {{ daysUntil }}<span class="text-base font-normal ml-1 text-teal-600 dark:text-teal-400">days</span>
