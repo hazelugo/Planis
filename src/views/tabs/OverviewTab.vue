@@ -33,55 +33,84 @@ function fmtWeatherDate(d: string) {
 }
 
 const weatherNote = ref('')
+let weatherAbortController: AbortController | null = null
 
-async function geocode(name: string): Promise<{ lat: number; lon: number } | null> {
-  // Try Photon first (better coverage, works with full "City, Country" strings)
+async function geocode(name: string, signal: AbortSignal): Promise<{ lat: number; lon: number } | null> {
   try {
-    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(name)}&limit=1&lang=en`)
+    const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(name)}&limit=1&lang=en`, { signal })
     const d = await r.json()
     if (d.features?.length) {
       const [lon, lat] = d.features[0].geometry.coordinates
       return { lat, lon }
     }
-  } catch {}
-  // Fallback: Open-Meteo geocoding with just the first token
+  } catch (e) { if ((e as Error).name === 'AbortError') throw e }
   try {
     const token = name.split(',')[0].trim()
-    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(token)}&count=1&language=en&format=json`)
+    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(token)}&count=1&language=en&format=json`, { signal })
     const d = await r.json()
     if (d.results?.length) return { lat: d.results[0].latitude, lon: d.results[0].longitude }
-  } catch {}
+  } catch (e) { if ((e as Error).name === 'AbortError') throw e }
   return null
 }
 
 async function fetchWeather() {
   if (!trip.state.trip.destination) { weather.value = []; weatherNote.value = ''; return }
+
+  // Cancel any in-flight request before starting a new one
+  weatherAbortController?.abort()
+  weatherAbortController = new AbortController()
+  const { signal } = weatherAbortController
+
   weatherLoading.value = true; weatherError.value = ''; weatherNote.value = ''
   try {
-    const coords = destCoords.value ?? await geocode(trip.state.trip.destination)
-    if (!coords) { weatherError.value = 'Location not found — try a nearby city or check the spelling.'; weatherLoading.value = false; return }
+    const coords = destCoords.value ?? await geocode(trip.state.trip.destination, signal)
+    if (!coords) {
+      weatherError.value = 'Location not found — try a nearby city or check the spelling.'
+      weatherLoading.value = false
+      return
+    }
     const { lat, lon } = coords
     const today = new Date().toISOString().slice(0, 10)
     const maxEnd = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10)
-    const tripStart = trip.state.trip.startDate && trip.state.trip.startDate >= today ? trip.state.trip.startDate : today
-    // Trip is beyond forecast range — show current 7-day weather instead
-    let start = tripStart
+    const tripStart = trip.state.trip.startDate && trip.state.trip.startDate >= today
+      ? trip.state.trip.startDate : today
+
+    // Trip beyond 15-day forecast window — show a helpful message instead of misleading current conditions
     if (tripStart > maxEnd) {
-      start = today
-      weatherNote.value = 'Trip too far ahead for a forecast — showing current conditions instead.'
+      const daysAway = Math.ceil((new Date(tripStart).getTime() - (Date.now() + 15 * 86400000)) / 86400000)
+      weatherNote.value = daysAway > 7
+        ? 'Forecast not available yet — check back closer to departure.'
+        : `Forecast available in ~${daysAway} day${daysAway !== 1 ? 's' : ''}.`
+      weather.value = []
+      weatherLoading.value = false
+      return
     }
-    const endRaw = trip.state.trip.endDate && !weatherNote.value ? trip.state.trip.endDate : new Date(Date.now() + 6 * 86400000).toISOString().slice(0, 10)
-    const end = endRaw > maxEnd ? maxEnd : (endRaw < start ? start : endRaw)
-    const wData = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&start_date=${start}&end_date=${end}`).then(r => r.json())
-    if (wData.error) { weatherError.value = wData.reason || 'Could not load weather' }
-    else if (wData.daily) {
+
+    const endRaw = trip.state.trip.endDate && trip.state.trip.endDate > tripStart
+      ? trip.state.trip.endDate : new Date(Date.now() + 6 * 86400000).toISOString().slice(0, 10)
+    const end = endRaw > maxEnd ? maxEnd : endRaw
+
+    const wData = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&start_date=${tripStart}&end_date=${end}`,
+      { signal }
+    ).then(r => r.json())
+
+    if (wData.error) {
+      weatherError.value = wData.reason || 'Could not load weather'
+    } else if (wData.daily) {
       weather.value = wData.daily.time.map((date: string, i: number) => ({
-        date, code: (wData.daily.weather_code ?? wData.daily.weathercode)[i],
-        high: Math.round(wData.daily.temperature_2m_max[i]), low: Math.round(wData.daily.temperature_2m_min[i]),
-        sunrise: wData.daily.sunrise[i], sunset: wData.daily.sunset[i],
+        date,
+        code: (wData.daily.weather_code ?? wData.daily.weathercode)[i],
+        high: Math.round(wData.daily.temperature_2m_max[i]),
+        low: Math.round(wData.daily.temperature_2m_min[i]),
+        sunrise: wData.daily.sunrise[i],
+        sunset: wData.daily.sunset[i],
       }))
     }
-  } catch { weatherError.value = 'Could not load weather' }
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') return // request cancelled — don't update state
+    weatherError.value = 'Could not load weather — check your connection.'
+  }
   weatherLoading.value = false
 }
 
@@ -388,22 +417,25 @@ function fmtDate(d: string) {
         <svg class="animate-spin shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
         Loading weather…
       </div>
-      <p v-else-if="weatherError" class="text-sm text-rose-500">{{ weatherError }}</p>
+      <div v-else-if="weatherError" class="flex items-center justify-between py-1 gap-3">
+        <p class="text-sm text-rose-500">{{ weatherError }}</p>
+        <button @click="fetchWeather" class="shrink-0 text-xs font-semibold text-rose-500 hover:text-rose-700 border border-rose-200 dark:border-rose-800/40 rounded-lg px-2.5 py-1 transition-colors">Retry</button>
+      </div>
+      <div v-else-if="weatherNote && !weather.length" class="flex items-start gap-2 py-1 text-slate-400 text-sm">
+        <svg class="shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        {{ weatherNote }}
+      </div>
       <div v-else-if="weather.length" class="overflow-x-auto -mx-2 px-2 pb-1">
-        <p v-if="weatherNote" class="text-xs text-amber-600 dark:text-amber-400 mb-3 flex items-center gap-1.5">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          {{ weatherNote }}
-        </p>
         <div class="flex gap-2.5" style="min-width:max-content">
           <div v-for="day in weather" :key="day.date"
             class="flex flex-col items-center gap-1.5 px-3.5 py-3 bg-slate-50 dark:bg-inset rounded-2xl min-w-[76px]">
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{{ fmtWeatherDate(day.date) }}</p>
             <span class="text-3xl leading-none">{{ weatherEmoji(day.code) }}</span>
-            <p class="text-[10px] text-slate-400 text-center leading-snug">{{ WMO[day.code] || '' }}</p>
+            <p class="text-[10px] text-slate-400 text-center leading-snug">{{ WMO[day.code] || 'Conditions vary' }}</p>
             <div class="flex items-center gap-1.5 mt-0.5">
-              <span class="text-sm font-bold text-rose-500">{{ day.high }}°</span>
+              <span class="text-sm font-bold text-rose-500">{{ day.high }}°C</span>
               <span class="text-slate-300">/</span>
-              <span class="text-xs text-blue-400">{{ day.low }}°</span>
+              <span class="text-xs text-blue-400">{{ day.low }}°C</span>
             </div>
             <div class="flex items-center gap-1 text-[10px] text-amber-500 font-medium">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
