@@ -1,20 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* ============================================================
-   Tailwind v4 semantic surface tokens — dark-mode aware via
-   CSS variable indirection. Use these instead of repeating
-   bg-white dark:bg-[#1a1f2e] etc. throughout components.
-   ============================================================ */
-@theme inline {
-  --color-surface:  var(--bg-surface);   /* bg-surface  — card / panel         */
-  --color-inset:    var(--bg-muted);     /* bg-inset    — inputs / sunken areas */
-  --color-lift:     var(--bg-subtle);    /* bg-lift     — hover / selected      */
-  --color-hairline: var(--border-soft);  /* border-hairline — card borders      */
-}
 
 /* ============================================================
    Planis — Design Tokens

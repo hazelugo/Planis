@@ -10,6 +10,12 @@ export default {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
       },
+      colors: {
+        surface:  'var(--bg-surface)',
+        inset:    'var(--bg-muted)',
+        lift:     'var(--bg-subtle)',
+        hairline: 'var(--border-soft)',
+      },
     },
   },
   plugins: [],

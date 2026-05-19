@@ -86,7 +86,11 @@ async function fetchWeather() {
 }
 
 let weatherTimer: ReturnType<typeof setTimeout> | undefined
-watch(() => [trip.state.trip.destination, trip.state.trip.startDate, trip.state.trip.endDate], () => {
+let lastWeatherKey = ''
+watch(() => [trip.state.trip.destination, trip.state.trip.startDate, trip.state.trip.endDate], ([dest, start, end]) => {
+  const key = `${dest}:${start}:${end}`
+  if (key === lastWeatherKey && weather.value.length > 0) return
+  lastWeatherKey = key
   clearTimeout(weatherTimer)
   weatherTimer = setTimeout(fetchWeather, 900)
 }, { immediate: true })

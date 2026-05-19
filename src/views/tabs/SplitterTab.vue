@@ -11,7 +11,8 @@ const newPayment = reactive({ paidById: '', amount: 0, description: '', splitAmo
 const editingPaymentId = ref<string | null>(null)
 const newFriendName = ref('')
 const AVATAR_COLORS = ['#6366f1', '#14b8a6', '#f59e0b', '#10b981', '#8b5cf6']
-const avatarColor = (id: string) => AVATAR_COLORS[trip.state.friends.findIndex(f => f.id === id) % 5]
+const avatarColorMap = computed(() => new Map(trip.state.friends.map((f, i) => [f.id, AVATAR_COLORS[i % 5]])))
+const avatarColor = (id: string) => avatarColorMap.value.get(id) ?? AVATAR_COLORS[0]
 
 function addFriendLocal() {
   const n = newFriendName.value.trim()
