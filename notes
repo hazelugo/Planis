@@ -1,0 +1,79 @@
+Design Critique: Planis
+
+Anti-Patterns Verdict: PASS — this is not AI slop
+
+The design has real conviction. Teal primary is distinctive and consistently applied, the eyebrow labels give it genuine character, the itinerary timeline spine is a design choice no generic AI would make, and the "All settled up! 🎉" state shows product care. Two borderline tells: the teal box-shadow glow on the hero card (rgba(20,184,166,.45)) and the gradient avatar bubbles in the Splitter (rose gradient for "owes", teal for "owed to") are in the AI palette. Neither is disqualifying — both feel intentional.
+
+---
+
+Overall Impression
+
+The app looks polished and has warmth. The single biggest problem is form-first architecture that doesn't scale — both the Itinerary and Splitter permanently surface their full add-forms at the top of the screen. On a fresh trip this is fine. At 20 events and 8 expenses, users scroll past large, irrelevant forms to see their data. The interface was designed for the empty state and doesn't adapt to the full state.
+
+---
+
+What's Working
+
+1. The Itinerary timeline spine. The left-border vertical line with category-colored dot nodes is the most distinctive UI element in the app. It makes the itinerary feel like a real schedule rather than a list. The day-group headers with running cost totals are excellent information design — they answer "what does this day cost?" without any extra tap.
+
+2. The Splitter settlement UX. The "owes → owed" card with dual gradient avatars, the ✓ Paid checkbox, the strikethrough on settled amounts, and the "All settled up!" celebration state together form a satisfying micro-journey. Users get clear visual confirmation of progress. This is genuinely well-designed.
+
+3. The Overview hero card. The teal gradient card with the cost total, per-person chip, and budget progress bar is visually strong and communicates a lot at a glance. The line-clamp cost hero number with clamp(2.25rem, 8vw, 4.5rem) scales well. The rose bar turning red when over budget is a good semantic use of color.
+
+---
+
+Priority Issues
+
+1. Form-first architecture breaks at scale
+
+- What: Both the Itinerary add-form and the Splitter expense form are permanently pinned to the top. Every return visit, users scroll past a large form they may not need.
+- Why it matters: A trip with 20 events requires scrolling past a 6-field form before seeing the itinerary. The interface was designed for day 1, not day 15. The most-used action for return users (view/browse) is penalized to optimize for first-use (add).
+- Fix: Collapse the add-form to a single "＋ Add event" row that expands on click. The button + collapsed summary can occupy one line. Events exist → form is secondary. This pattern is standard in Notion, Linear, Things.
+- Command: /arrange
+
+2. "Splitter" as a navigation label is opaque
+
+- What: The tab is called "Splitter" in both the sidebar and bottom nav. New users don't know what this means until they're inside.
+- Why it matters: First-time users from a shared link (the primary acquisition path — you send someone the URL) will see "Splitter" and have no idea this is where cost-splitting lives. They may never find it.
+- Fix: Rename to "Costs" or "Expenses." It's more scannable, covers both the expense logging AND the settlement, and doesn't require onboarding. The word "split" can still appear inside the tab.
+- Command: /clarify
+
+3. Overview tab lacks visual hierarchy — everything is a section
+
+- What: The Overview stacks: welcome banner → destination/dates form → hero summary card → stats strip → weather forecast. Five sections of near-equal visual weight.
+- Why it matters: The eye has nowhere to land. On return visits, the destination (already set) still gets the largest type on the page because it's an H1-weight click-to-edit field. The summary card — the thing users actually want to see — is visually equal to the dates form above it.
+- Fix: Once a destination is set, collapse the trip header (destination + dates + budget) into a compact locked state that shows the info but doesn't compete with the summary card. The hero card should dominate the screen, not fight a 28px bold input for attention.
+- Command: /arrange
+
+4. Photos tab shows two empty states simultaneously
+
+- What: When there are no photos, the screen shows the upload card AND an empty state card ("No memories yet. Upload photos as you go..."). The user is looking at an upload affordance and a message telling them to upload.
+- Why it matters: The redundancy creates visual noise and dilutes both messages. The upload card IS the empty state — it doesn't need a second card below it explaining the same thing.
+- Fix: Remove the second empty state card. Redesign the upload card to carry both the upload affordance AND the warm encouragement copy ("Your wall is waiting — drop the first photo from the trip."). One card, one message.
+- Command: /distill
+
+5. Weather "showing current conditions" is confusing
+
+- What: When a trip is far in the future, the app shows current weather with a small amber note: "Trip too far ahead for a forecast — showing current conditions instead."
+- Why it matters: Users opened the app to think about their trip. Seeing today's weather in their destination (especially if it's a different climate) is actively misleading at a glance before they notice the note. The note is text-xs and easy to miss.
+- Fix: Two options: (A) Don't show weather at all for far-future trips — show a "Forecast available N days before departure" message instead. (B) Make the "current conditions" state more visually distinct from a forecast, e.g., a different card header that says "Current weather in [destination]" rather than "Weather Forecast." Option A is simpler and more honest.
+- Command: /harden
+
+---
+
+Minor Observations
+
+- "pp" abbreviation in the hero card ($240 pp) — "pp" is travel-industry shorthand but not universal. "$240 / person" is one extra character and universally clear.
+- The budget input in Overview — It's just a number behind a — label if unset. There's no clear affordance that it's editable. The destination input has a hover edit icon; the budget doesn't. Inconsistent discoveryPattern.
+- Crew avatar remove buttons (w-5 h-5 = 20px) in the Splitter grid — still the smallest interactive element in the app. On mobile these are nearly impossible to tap reliably.
+- Itinerary timeline spine breaks during inline edit — The absolute left-border spine continues behind the edit form, but the edit form uses ml-10 which pushes it right of the spine. Visually the spine appears to "go through" the edit form.
+- Stats strip on mobile — 2×2 grid with divide-x borders. On mobile the vertical dividers between "Travelers" and "Duration" disappear (they're horizontal in the 2-col layout), leaving the columns with no visual separation.
+
+---
+
+Questions to Consider
+
+- What does a power user's Itinerary look like? A 10-day trip with 4+ events per day is 40+ items. Does the form-first layout still feel right at that scale? What does the scroll length become?
+- Does the Overview tab need weather? It's a genuinely useful feature, but it also makes Overview the heaviest, slowest tab. Could weather live in the Itinerary tab next to date groups, where context is stronger?
+- Is there a "sharing moment" UX? The app's core value is group planning via shared link. Is there a clear "invite your crew" call-to-action anywhere? The copy link button is in the header — small, icon-only. Most people won't find it without being told.
+- What happens on mobile during trip? The app's brand promise is that you can use it during the trip. But photo upload, expense logging, and itinerary viewing on mobile all require substantial scrolling. Is there a "trip mode" that surfaces the most important actions for an in-progress trip?
