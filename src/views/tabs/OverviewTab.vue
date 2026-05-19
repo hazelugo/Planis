@@ -226,11 +226,11 @@ function fmtDate(d: string) {
 
     <!-- Welcome banner (empty state) -->
     <div v-if="!trip.state.trip.destination && !trip.state.events.length && !trip.state.friends.length"
-      class="bg-gradient-to-r from-teal-50 via-cyan-50 to-teal-50 border border-teal-100 rounded-2xl p-6 flex items-center gap-5 overflow-hidden">
+      class="bg-gradient-to-r from-teal-50 via-cyan-50 to-teal-50 dark:from-teal-950/40 dark:via-teal-900/20 dark:to-teal-950/40 border border-teal-100 dark:border-teal-800/40 rounded-2xl p-6 flex items-center gap-5 overflow-hidden">
       <span class="text-4xl select-none anim-float shrink-0">✈️</span>
       <div>
-        <p class="font-bold text-teal-800 dark:text-teal-300 text-base">Your next adventure starts here.</p>
-        <p class="text-sm text-teal-600 dark:text-teal-400 mt-1 leading-relaxed">
+        <p class="font-bold text-teal-900 dark:text-teal-100 text-base">Your next adventure starts here.</p>
+        <p class="text-sm text-teal-700 dark:text-teal-400 mt-1 leading-relaxed">
           Type your destination below, add dates and a budget, then share the link — your whole group can plan and split costs together.
         </p>
       </div>
