@@ -31,6 +31,7 @@ export interface TripEvent {
   category: EventCategory
   cost: number
   perPerson: boolean
+  location: string    // Address or place name for Maps
   notes: string
   url: string
 }

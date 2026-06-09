@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, reactive, nextTick } from 'vue'
 import { useTripStore } from '@/stores/trips'
+import { useUIStore } from '@/stores/ui'
+import { buildGoogleMapsPlaceUrl, downloadTripKml, GOOGLE_MY_MAPS_URL } from '@/utils/tripMap'
 import type { TripEvent, EventCategory } from '@/types/domain'
 
 const trip = useTripStore()
+const ui = useUIStore()
 
 // ── Form ──────────────────────────────────────────────────────────────────
-const newEvent = ref({ name: '', date: '', time: '', category: 'Adventure' as EventCategory, cost: 0, perPerson: false, notes: '', url: '' })
+const newEvent = ref({ name: '', date: '', time: '', category: 'Adventure' as EventCategory, cost: 0, perPerson: false, location: '', notes: '', url: '' })
 const addSuccess = ref(false)
 const formExpanded = ref(false)
 const nameInputRef = ref<HTMLInputElement | null>(null)
@@ -14,15 +17,15 @@ function expandForm() { formExpanded.value = true; nextTick(() => nameInputRef.v
 
 // ── Edit ──────────────────────────────────────────────────────────────────
 const editingId = ref<string | null>(null)
-const editForm = reactive({ name: '', date: '', time: '', category: 'Adventure' as EventCategory, cost: 0, perPerson: false, notes: '', url: '' })
+const editForm = reactive({ name: '', date: '', time: '', category: 'Adventure' as EventCategory, cost: 0, perPerson: false, location: '', notes: '', url: '' })
 
 function startEdit(event: TripEvent) {
   editingId.value = event.id
-  Object.assign(editForm, { ...event })
+  Object.assign(editForm, { location: '', ...event })
 }
 function saveEdit() {
   if (!editForm.name.trim() || !editingId.value) return
-  trip.updateEvent(editingId.value, { ...editForm, name: editForm.name.trim() })
+  trip.updateEvent(editingId.value, { ...editForm, name: editForm.name.trim(), location: editForm.location.trim() })
   editingId.value = null
 }
 function cancelEdit() { editingId.value = null }
@@ -146,7 +149,7 @@ function passesFilters(e: TripEvent) {
   const q = searchText.value.trim().toLowerCase()
   const min = costMin.value !== '' ? Number(costMin.value) : null
   const max = costMax.value !== '' ? Number(costMax.value) : null
-  if (q && !e.name.toLowerCase().includes(q) && !(e.notes ?? '').toLowerCase().includes(q)) return false
+  if (q && !e.name.toLowerCase().includes(q) && !(e.location ?? '').toLowerCase().includes(q) && !(e.notes ?? '').toLowerCase().includes(q)) return false
   const lineCost = e.perPerson ? e.cost * totalParticipants.value : e.cost
   if (min !== null && lineCost < min) return false
   if (max !== null && lineCost > max) return false
@@ -193,6 +196,20 @@ const matchCount = computed(() =>
     : filteredFlatEvents.value.length
 )
 
+/** Events with a location, in current display order (day/time or manual). */
+const tripMapStops = computed(() => {
+  const events = groupByDay.value
+    ? groupedEvents.value.flatMap(g => g.events)
+    : filteredFlatEvents.value
+  return events
+    .map(ev => ({
+      name: ev.name,
+      location: (ev.location ?? '').trim(),
+      notes: [ev.date && fmtDate(ev.date), ev.time, ev.notes].filter(Boolean).join(' · '),
+    }))
+    .filter(s => s.location)
+})
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 const CAT_COLORS: Record<string, { badge: string; dot: string }> = {
   Transport: { badge: 'bg-blue-100 text-blue-600',       dot: 'bg-blue-100 text-blue-600'       },
@@ -211,13 +228,18 @@ function fmtDate(d: string) {
   if (!d) return ''
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
+function eventMapsUrl(event: TripEvent): string | null {
+  const q = (event.location ?? '').trim()
+  if (!q) return null
+  return `https://maps.google.com/?q=${encodeURIComponent(q)}`
+}
 
 const inputCls = 'w-full px-3 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500'
 
 function addEvent() {
   if (!newEvent.value.name.trim()) return
-  trip.addEvent({ ...newEvent.value, name: newEvent.value.name.trim() })
-  newEvent.value = { name: '', date: '', time: '', category: 'Adventure', cost: 0, perPerson: false, notes: '', url: '' }
+  trip.addEvent({ ...newEvent.value, name: newEvent.value.name.trim(), location: newEvent.value.location.trim() })
+  newEvent.value = { name: '', date: '', time: '', category: 'Adventure', cost: 0, perPerson: false, location: '', notes: '', url: '' }
   addSuccess.value = true
   setTimeout(() => { addSuccess.value = false; formExpanded.value = false }, 1200)
 }
@@ -255,6 +277,7 @@ function exportPDF() {
         <td style="padding:10px 0;font-size:14px;vertical-align:top">
           ${ev.url ? `<a href="${esc(ev.url)}" style="color:#0d9488;font-weight:600;text-decoration:none">${esc(ev.name)}</a>` : `<strong>${esc(ev.name)}</strong>`}
           ${ev.time ? `<span style="font-size:12px;color:#94a3b8"> · ${esc(ev.time)}</span>` : ''}
+          ${(ev.location ?? '').trim() ? `<div style="font-size:12px;color:#64748b;margin-top:3px">📍 ${esc((ev.location ?? '').trim())}</div>` : ''}
           ${ev.notes ? `<div style="font-size:12px;color:#64748b;font-style:italic;margin-top:3px">${esc(ev.notes)}</div>` : ''}
         </td>
         <td style="padding:10px 8px 10px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;white-space:nowrap;width:72px;vertical-align:top">${costText}</td>
@@ -275,6 +298,47 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
 
   const win = window.open('', '_blank')
   if (win) { win.document.write(html); win.document.close() }
+}
+
+function tripKmlFilename() {
+  const slug = (trip.state.trip.destination || 'trip').replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'trip'
+  return `${slug}-locations.kml`
+}
+
+function downloadTripMapKml() {
+  const stops = tripMapStops.value
+  if (!stops.length) return
+  downloadTripKml(stops, tripKmlFilename(), trip.state.trip.destination || 'Trip locations')
+}
+
+async function openTripInMaps() {
+  const stops = tripMapStops.value
+  if (!stops.length) {
+    await ui.showConfirm({
+      title: 'No locations yet',
+      message: 'Add a location to your itinerary events to put them on a map.',
+      okLabel: 'Got it',
+    })
+    return
+  }
+
+  // One stop → plain place view in Google Maps.
+  if (stops.length === 1) {
+    const url = buildGoogleMapsPlaceUrl(stops[0].location)
+    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    return
+  }
+
+  // Multiple stops → pin map via My Maps (avoids cramming everything into Directions).
+  const proceed = await ui.showConfirm({
+    title: `Map ${stops.length} locations`,
+    message: 'We’ll download a pin map file — not turn-by-turn directions. In Google My Maps: Create map → Import → upload the file.',
+    okLabel: 'Download pin map',
+    okClass: 'bg-teal-600 hover:bg-teal-700',
+  })
+  if (!proceed) return
+  downloadTripMapKml()
+  window.open(GOOGLE_MY_MAPS_URL, '_blank', 'noopener,noreferrer')
 }
 </script>
 
@@ -346,8 +410,16 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
       </div>
 
       <div class="mb-4">
+        <label class="eyebrow block mb-1.5">Location <span class="normal-case font-normal text-slate-300">(optional)</span></label>
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <input v-model="newEvent.location" type="text" placeholder="Address or place name for Maps" maxlength="200" :class="inputCls + ' pl-8'" />
+        </div>
+      </div>
+
+      <div class="mb-4">
         <label class="eyebrow block mb-1.5">Notes <span class="normal-case font-normal text-slate-300">(optional)</span></label>
-        <textarea v-model="newEvent.notes" rows="2" placeholder="Booking refs, addresses, reminders…" maxlength="500"
+        <textarea v-model="newEvent.notes" rows="2" placeholder="Booking refs, reminders…" maxlength="500"
           class="w-full px-3 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
       </div>
 
@@ -389,7 +461,7 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
           <!-- Text search -->
           <div class="flex-1 relative">
             <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input v-model="searchText" type="text" aria-label="Search events" placeholder="Search by name or notes…"
+            <input v-model="searchText" type="text" aria-label="Search events" placeholder="Search by name, location, or notes…"
               class="w-full pl-9 pr-3 py-2 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500" />
           </div>
           <!-- Filter toggle -->
@@ -401,12 +473,27 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
             Cost
           </button>
+          <!-- Open all locations in Google Maps -->
+          <button @click="openTripInMaps" aria-label="Open trip locations in Google Maps"
+            :class="['flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all shrink-0',
+              tripMapStops.length
+                ? 'border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                : 'border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']"
+            :title="tripMapStops.length ? `Open ${tripMapStops.length} location${tripMapStops.length !== 1 ? 's' : ''} in Google Maps` : 'Add locations to events first'">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            Map
+          </button>
           <!-- Export PDF -->
           <button @click="exportPDF" aria-label="Export itinerary to PDF"
             class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset transition-all shrink-0"
             title="Export to PDF">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             PDF
+          </button>
+          <button v-if="tripMapStops.length > 1" @click="exportTripKml" aria-label="Download KML for Google My Maps"
+            class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset transition-all shrink-0"
+            title="Download KML — import into Google My Maps for a pin on every stop">
+            KML
           </button>
           <!-- Clear -->
           <button v-if="hasFilter" @click="clearFilters" aria-label="Clear filters"
@@ -513,6 +600,13 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
                       </div>
                     </div>
                     <div class="sm:col-span-2">
+                      <label class="eyebrow block mb-1.5">Location <span class="normal-case font-normal text-slate-300">(optional)</span></label>
+                      <div class="relative">
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                        <input v-model="editForm.location" type="text" placeholder="Address or place name for Maps" maxlength="200" :class="inputCls + ' pl-8'" />
+                      </div>
+                    </div>
+                    <div class="sm:col-span-2">
                       <label class="eyebrow block mb-1.5">Notes</label>
                       <textarea v-model="editForm.notes" rows="2" class="w-full px-3 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
                     </div>
@@ -553,6 +647,10 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
                           <span :class="['text-[11px] px-2 py-0.5 rounded-full font-semibold', CAT_COLORS[event.category]?.badge]">{{ event.category }}</span>
                           <span v-if="event.perPerson" class="text-[11px] bg-slate-100 dark:bg-inset text-slate-500 px-2 py-0.5 rounded-full">Per person</span>
                         </div>
+                        <p v-if="(event.location ?? '').trim()" class="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5 leading-snug line-clamp-2">
+                          <a v-if="eventMapsUrl(event)" :href="eventMapsUrl(event)!" target="_blank" rel="noopener" class="hover:underline">{{ (event.location ?? '').trim() }}</a>
+                          <span v-else>{{ (event.location ?? '').trim() }}</span>
+                        </p>
                         <p v-if="event.notes" class="text-xs text-slate-400 mt-2 leading-relaxed pl-3 border-l-2 border-slate-100 dark:border-hairline line-clamp-2">{{ event.notes }}</p>
                       </div>
                       <div class="text-right shrink-0 ml-2">
@@ -572,9 +670,10 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
                           class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
                         </button>
-                        <a :href="`https://maps.google.com/?q=${encodeURIComponent(event.name + (trip.state.trip.destination ? ' ' + trip.state.trip.destination : ''))}`"
+                        <a v-if="eventMapsUrl(event)" :href="eventMapsUrl(event)!"
                           target="_blank" rel="noopener"
                           aria-label="View on Google Maps"
+                          title="Open location in Google Maps"
                           class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                         </a>
@@ -642,6 +741,13 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
                   </div>
                 </div>
                 <div class="sm:col-span-2">
+                  <label class="eyebrow block mb-1.5">Location <span class="normal-case font-normal text-slate-300">(optional)</span></label>
+                  <div class="relative">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <input v-model="editForm.location" type="text" placeholder="Address or place name for Maps" maxlength="200" :class="inputCls + ' pl-8'" />
+                  </div>
+                </div>
+                <div class="sm:col-span-2">
                   <label class="eyebrow block mb-1.5">Notes</label>
                   <textarea v-model="editForm.notes" rows="2" class="w-full px-3 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
                 </div>
@@ -696,6 +802,10 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
                       <span :class="['text-[11px] px-2 py-0.5 rounded-full font-semibold', CAT_COLORS[event.category]?.badge]">{{ event.category }}</span>
                       <span v-if="event.perPerson" class="text-[11px] bg-slate-100 dark:bg-inset text-slate-500 px-2 py-0.5 rounded-full">Per person</span>
                     </div>
+                    <p v-if="(event.location ?? '').trim()" class="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5 leading-snug line-clamp-2">
+                      <a v-if="eventMapsUrl(event)" :href="eventMapsUrl(event)!" target="_blank" rel="noopener" class="hover:underline">{{ (event.location ?? '').trim() }}</a>
+                      <span v-else>{{ (event.location ?? '').trim() }}</span>
+                    </p>
                     <p v-if="event.notes" class="text-xs text-slate-400 mt-2 leading-relaxed pl-3 border-l-2 border-slate-100 dark:border-hairline line-clamp-2">{{ event.notes }}</p>
                   </div>
                   <div class="text-right shrink-0 ml-2">
@@ -713,8 +823,9 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
                       class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
-                    <a :href="`https://maps.google.com/?q=${encodeURIComponent(event.name + (trip.state.trip.destination ? ' ' + trip.state.trip.destination : ''))}`"
+                    <a v-if="eventMapsUrl(event)" :href="eventMapsUrl(event)!"
                       target="_blank" rel="noopener" aria-label="View on Google Maps"
+                      title="Open location in Google Maps"
                       class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all lg:opacity-0 lg:group-hover:opacity-100 transition-all">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                     </a>
