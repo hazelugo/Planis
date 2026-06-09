@@ -64,7 +64,7 @@ async function fetchWeather() {
 
   weatherLoading.value = true; weatherError.value = ''; weatherNote.value = ''
   try {
-    const coords = destCoords.value ?? await geocode(trip.state.trip.destination, signal)
+    const coords = await geocode(trip.state.trip.destination, signal)
     if (!coords) {
       weatherError.value = 'Location not found — try a nearby city or check the spelling.'
       weatherLoading.value = false

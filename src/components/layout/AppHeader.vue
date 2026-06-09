@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { RouterLink } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
@@ -16,6 +17,7 @@ const emit = defineEmits<{ (e: 'copy-link'): void }>()
 const ui = useUIStore()
 const auth = useAuthStore()
 const trip = useTripStore()
+const { tripId, canEdit } = storeToRefs(trip)
 const { navigateToTrip, getShareUrl, resolveEditToken, buildTripUrl } = useTrip()
 
 const banner = useBanner()
@@ -39,8 +41,8 @@ const meta = () => TAB_META[props.currentTab] ?? TAB_META.overview
 
 const authLink = computed(() => {
   const params = new URLSearchParams()
-  if (trip.tripId) params.set('trip', trip.tripId)
-  const edit = resolveEditToken(trip.tripId)
+  if (tripId.value) params.set('trip', tripId.value)
+  const edit = resolveEditToken(tripId.value)
   if (edit) params.set('edit', edit)
   const qs = params.toString()
   return qs ? `/auth?${qs}` : '/auth'
@@ -59,9 +61,9 @@ function fmtDate(d: string) {
 }
 
 function copyLink() {
-  const url = trip.canEdit
-    ? getShareUrl(trip.tripId, resolveEditToken(trip.tripId))
-    : buildTripUrl(trip.tripId)
+  const url = canEdit.value
+    ? getShareUrl(tripId.value, resolveEditToken(tripId.value))
+    : buildTripUrl(tripId.value)
   navigator.clipboard.writeText(url).catch(() => {})
   linkCopied.value = true
   emit('copy-link')
@@ -80,7 +82,7 @@ async function deleteTrip(id: string) {
   const idx = trip.tripIndex.findIndex(t => t.id === id)
   if (idx !== -1) trip.tripIndex.splice(idx, 1)
   localStorage.setItem('travelapp_trips', JSON.stringify(trip.tripIndex))
-  if (id === trip.tripId) {
+  if (id === tripId.value) {
     trip.tripIndex.length > 0 ? switchTrip(trip.tripIndex[0].id) : startNewTrip()
   }
 }
