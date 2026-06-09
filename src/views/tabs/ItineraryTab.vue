@@ -2,7 +2,10 @@
 import { ref, computed, reactive, nextTick } from 'vue'
 import { useTripStore } from '@/stores/trips'
 import { useUIStore } from '@/stores/ui'
-import { buildGoogleMapsPlaceUrl, downloadTripKml, GOOGLE_MY_MAPS_URL } from '@/utils/tripMap'
+import {
+  buildGoogleMapsDirectionsUrl, downloadTripKml,
+  GOOGLE_MY_MAPS_URL, openMapsUrl, type TripMapStop,
+} from '@/utils/tripMap'
 import type { TripEvent, EventCategory } from '@/types/domain'
 
 const trip = useTripStore()
@@ -196,19 +199,33 @@ const matchCount = computed(() =>
     : filteredFlatEvents.value.length
 )
 
-/** Events with a location, in current display order (day/time or manual). */
-const tripMapStops = computed(() => {
-  const events = groupByDay.value
-    ? groupedEvents.value.flatMap(g => g.events)
-    : filteredFlatEvents.value
-  return events
-    .map(ev => ({
-      name: ev.name,
-      location: (ev.location ?? '').trim(),
-      notes: [ev.date && fmtDate(ev.date), ev.time, ev.notes].filter(Boolean).join(' · '),
+interface TripMapDay {
+  key: string
+  label: string
+  stops: TripMapStop[]
+}
+
+function eventToMapStop(ev: TripEvent): TripMapStop {
+  return {
+    name: ev.name,
+    location: (ev.location ?? '').trim(),
+    notes: [ev.date && fmtDate(ev.date), ev.time, ev.notes].filter(Boolean).join(' · '),
+  }
+}
+
+/** Located stops grouped by itinerary day (time order within each day). */
+const tripMapDays = computed((): TripMapDay[] =>
+  groupedEvents.value
+    .map(g => ({
+      key: g.date || '__none__',
+      label: g.label,
+      stops: g.events.map(eventToMapStop).filter(s => s.location),
     }))
-    .filter(s => s.location)
-})
+    .filter(d => d.stops.length > 0)
+)
+
+const tripMapStops = computed(() => tripMapDays.value.flatMap(d => d.stops))
+const showMapDayPicker = ref(false)
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const CAT_COLORS: Record<string, { badge: string; dot: string }> = {
@@ -311,9 +328,26 @@ function downloadTripMapKml() {
   downloadTripKml(stops, tripKmlFilename(), trip.state.trip.destination || 'Trip locations')
 }
 
+function tripMapDayForKey(date: string) {
+  const key = date || '__none__'
+  return tripMapDays.value.find(d => d.key === key) ?? null
+}
+
+function openDayInMaps(day: TripMapDay) {
+  showMapDayPicker.value = false
+  const url = buildGoogleMapsDirectionsUrl(day.stops.map(s => s.location))
+  if (url) openMapsUrl(url)
+}
+
+async function downloadAllPins() {
+  showMapDayPicker.value = false
+  downloadTripMapKml()
+  openMapsUrl(GOOGLE_MY_MAPS_URL)
+}
+
 async function openTripInMaps() {
-  const stops = tripMapStops.value
-  if (!stops.length) {
+  const days = tripMapDays.value
+  if (!days.length) {
     await ui.showConfirm({
       title: 'No locations yet',
       message: 'Add a location to your itinerary events to put them on a map.',
@@ -322,23 +356,14 @@ async function openTripInMaps() {
     return
   }
 
-  // One stop → plain place view in Google Maps.
-  if (stops.length === 1) {
-    const url = buildGoogleMapsPlaceUrl(stops[0].location)
-    if (url) window.open(url, '_blank', 'noopener,noreferrer')
+  // One day → open that day's route (or single place) directly.
+  if (days.length === 1) {
+    openDayInMaps(days[0])
     return
   }
 
-  // Multiple stops → pin map via My Maps (avoids cramming everything into Directions).
-  const proceed = await ui.showConfirm({
-    title: `Map ${stops.length} locations`,
-    message: 'We’ll download a pin map file — not turn-by-turn directions. In Google My Maps: Create map → Import → upload the file.',
-    okLabel: 'Download pin map',
-    okClass: 'bg-teal-600 hover:bg-teal-700',
-  })
-  if (!proceed) return
-  downloadTripMapKml()
-  window.open(GOOGLE_MY_MAPS_URL, '_blank', 'noopener,noreferrer')
+  // Multi-day → pick a day so Directions stays manageable.
+  showMapDayPicker.value = true
 }
 </script>
 
@@ -473,13 +498,13 @@ async function openTripInMaps() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
             Cost
           </button>
-          <!-- Open all locations in Google Maps -->
-          <button @click="openTripInMaps" aria-label="Open trip locations in Google Maps"
+          <!-- Trip map: one place in Maps, multiple → My Maps pin file -->
+          <button @click="openTripInMaps" aria-label="Open trip locations on a map"
             :class="['flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all shrink-0',
               tripMapStops.length
                 ? 'border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
                 : 'border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']"
-            :title="tripMapStops.length ? `Open ${tripMapStops.length} location${tripMapStops.length !== 1 ? 's' : ''} in Google Maps` : 'Add locations to events first'">
+            :title="tripMapStops.length ? (tripMapDays.length > 1 ? 'Directions by day' : tripMapStops.length === 1 ? 'Open location in Google Maps' : 'Open today\'s route in Google Maps') : 'Add locations to events first'">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
             Map
           </button>
@@ -489,11 +514,6 @@ async function openTripInMaps() {
             title="Export to PDF">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             PDF
-          </button>
-          <button v-if="tripMapStops.length > 1" @click="exportTripKml" aria-label="Download KML for Google My Maps"
-            class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset transition-all shrink-0"
-            title="Download KML — import into Google My Maps for a pin on every stop">
-            KML
           </button>
           <!-- Clear -->
           <button v-if="hasFilter" @click="clearFilters" aria-label="Clear filters"
@@ -553,9 +573,19 @@ async function openTripInMaps() {
       <!-- Grouped by day -->
       <div v-else-if="groupByDay" class="space-y-8">
         <div v-for="group in groupedEvents" :key="group.date || '__none__'">
-          <div class="flex items-baseline justify-between mb-4 pb-3 border-b border-slate-100 dark:border-hairline">
-            <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 leading-none">{{ group.label }}</h3>
-            <span class="text-xs font-semibold text-slate-400 ml-3 whitespace-nowrap">${{ fmt(group.total) }}</span>
+          <div class="flex items-baseline justify-between mb-4 pb-3 border-b border-slate-100 dark:border-hairline gap-2">
+            <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 leading-none min-w-0">{{ group.label }}</h3>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                v-if="tripMapDayForKey(group.date)"
+                @click="openDayInMaps(tripMapDayForKey(group.date)!)"
+                class="print:hidden flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+                :title="tripMapDayForKey(group.date)!.stops.length > 1 ? `Directions for ${tripMapDayForKey(group.date)!.stops.length} stops` : 'Open location in Maps'">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                {{ tripMapDayForKey(group.date)!.stops.length > 1 ? 'Route' : 'Map' }}
+              </button>
+              <span class="text-xs font-semibold text-slate-400 whitespace-nowrap">${{ fmt(group.total) }}</span>
+            </div>
           </div>
           <div class="relative">
             <div class="absolute left-5 top-0 bottom-0 w-px bg-slate-200 dark:bg-[#2a3347]"></div>
@@ -848,6 +878,54 @@ async function openTripInMaps() {
     </div>
 
   </div>
+
+  <!-- Pick a day for Google Maps directions (multi-day trips) -->
+  <Teleport to="body">
+    <div
+      v-if="showMapDayPicker"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-[1px]"
+      @click.self="showMapDayPicker = false"
+    >
+      <div
+        role="dialog"
+        aria-labelledby="map-day-picker-title"
+        class="bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-xl max-w-sm w-full p-5 anim-fade-up"
+      >
+        <h3 id="map-day-picker-title" class="text-base font-bold text-slate-800 dark:text-slate-100">Directions by day</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">One day at a time — stops follow your itinerary order.</p>
+        <ul class="mt-4 space-y-1.5 max-h-64 overflow-y-auto">
+          <li v-for="day in tripMapDays" :key="day.key">
+            <button
+              type="button"
+              @click="openDayInMaps(day)"
+              class="w-full text-left px-3.5 py-2.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 border border-transparent hover:border-emerald-100 dark:hover:border-emerald-800/40 transition-colors"
+            >
+              <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">{{ day.label }}</span>
+              <span class="text-[11px] text-slate-400 block mt-0.5">
+                {{ day.stops.length }} stop{{ day.stops.length !== 1 ? 's' : '' }}
+                · {{ day.stops.length > 1 ? 'Open directions' : 'Open place' }}
+              </span>
+            </button>
+          </li>
+        </ul>
+        <button
+          v-if="tripMapStops.length > 1"
+          type="button"
+          @click="downloadAllPins"
+          class="mt-3 w-full text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline text-center"
+        >
+          Or download all {{ tripMapStops.length }} pins for Google My Maps
+        </button>
+        <button
+          type="button"
+          @click="showMapDayPicker = false"
+          class="mt-3 w-full py-2 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset rounded-xl transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>

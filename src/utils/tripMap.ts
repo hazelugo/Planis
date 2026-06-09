@@ -14,6 +14,18 @@ export function buildGoogleMapsPlaceUrl(location: string): string | null {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
 }
 
+/** Multi-stop directions for a single day (keep daily batches small). */
+export function buildGoogleMapsDirectionsUrl(locations: string[]): string | null {
+  const stops = locations.map(l => l.trim()).filter(Boolean)
+  if (stops.length === 0) return null
+  if (stops.length === 1) return buildGoogleMapsPlaceUrl(stops[0])
+  return `https://www.google.com/maps/dir/${stops.map(s => encodeURIComponent(s)).join('/')}`
+}
+
+export function openMapsUrl(url: string) {
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
 /** KML for import into Google My Maps — named pins, no route overload. */
 export function buildTripKml(stops: TripMapStop[], documentName: string): string {
   const escXml = (s: string) =>
