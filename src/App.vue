@@ -1,34 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
 import { RouterView } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
-import { useTripStore } from '@/stores/trips'
-import { useTrip } from '@/composables/useTrip'
 import { storeToRefs } from 'pinia'
 
 const ui = useUIStore()
-const trip = useTripStore()
-const { resolveTripId, resolveEditToken } = useTrip()
 const { confirm } = storeToRefs(ui)
 const { confirmOk, confirmCancel } = ui
-
-// Disconnect realtime on pagehide so the page can enter bfcache.
-// Reconnect on pageshow if restored from bfcache (persisted = true).
-function onPageHide() { trip.unsubscribeFromRealTime() }
-function onPageShow(e: PageTransitionEvent) { if (e.persisted) trip.subscribeToRealTime() }
-
-onMounted(async () => {
-  ui.initDarkMode()
-  const tripId = resolveTripId()
-  await trip.initialize(tripId, resolveEditToken(tripId))
-  window.addEventListener('pagehide', onPageHide)
-  window.addEventListener('pageshow', onPageShow)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('pagehide', onPageHide)
-  window.removeEventListener('pageshow', onPageShow)
-})
 </script>
 
 <template>

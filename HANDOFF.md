@@ -35,6 +35,7 @@ vercel --prod                  # deploy
 ## Key architecture
 
 - **State:** `src/stores/trips.ts` — trip JSON blob, Supabase sync, realtime, edit tokens
+- **Realtime:** Subscription stays active in background tabs (do not unsubscribe on `pagehide`). If sync still fails, confirm `trips` is in Supabase → Database → Publications → `supabase_realtime`.
 - **Edit access:** New trips get `?edit=<token>`. Legacy trips without a token remain open-edit until "Get private editor link" is clicked.
 - **Tabs:** Overview, Itinerary, Spending, Splitter (Photos shelved)
 - **Dates:** `src/utils/dates.ts` — always parse `YYYY-MM-DD` as local midnight
@@ -48,6 +49,19 @@ vercel --prod                  # deploy
 | `VITE_SUPABASE_URL` | Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
 | `VITE_PEXELS_API_KEY` | Banner photos (optional — upload still works) |
+
+---
+
+## Authentication (Phase 4)
+
+- **Magic link:** `/auth` — `signInWithOtp`; no password.
+- **Anonymous trips:** `/?trip=UUID` works without signing in (no auth guard on `/`).
+- **Session:** `useAuthStore` + `onAuthStateChange` in `main.ts` before mount.
+- **Owner:** When signed in, `saveTrip` sets `owner_id` on the trips row.
+
+**Supabase dashboard (required once):** Authentication → URL Configuration → add redirect URLs:
+- `http://localhost:5173/`
+- `https://planis.hazelugo.com/`
 
 ---
 

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useUIStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/auth'
 import { useTripStore } from '@/stores/trips'
 import { useTrip } from '@/composables/useTrip'
 import { useBanner } from '@/composables/useBanner'
@@ -12,6 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'copy-link'): void }>()
 
 const ui = useUIStore()
+const auth = useAuthStore()
 const trip = useTripStore()
 const { navigateToTrip, getShareUrl, resolveEditToken, buildTripUrl } = useTrip()
 
@@ -33,6 +36,22 @@ const TAB_META: Record<string, { label: string; desc: string }> = {
   // photos:  { label: 'Photos',    desc: 'The memories' },
 }
 const meta = () => TAB_META[props.currentTab] ?? TAB_META.overview
+
+const authLink = computed(() => {
+  const params = new URLSearchParams()
+  if (trip.tripId) params.set('trip', trip.tripId)
+  const edit = resolveEditToken(trip.tripId)
+  if (edit) params.set('edit', edit)
+  const qs = params.toString()
+  return qs ? `/auth?${qs}` : '/auth'
+})
+
+const userLabel = computed(() => {
+  const email = auth.user?.email
+  if (!email) return 'Signed in'
+  const at = email.indexOf('@')
+  return at > 0 ? email.slice(0, at) : email
+})
 
 function fmtDate(d: string) {
   if (!d) return ''
@@ -377,6 +396,25 @@ async function onBannerFileChange(e: Event) {
         <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </button>
 
+      <!-- Account -->
+      <template v-if="auth.isAuthenticated">
+        <span class="hidden xl:inline text-xs text-slate-500 dark:text-slate-400 max-w-[120px] truncate" :title="auth.user?.email ?? ''">{{ userLabel }}</span>
+        <button type="button" @click="auth.signOut()" aria-label="Sign out"
+          :class="['px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all',
+            trip.state.trip.bannerUrl
+              ? 'text-white/80 hover:text-white hover:bg-white/20'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-inset']">
+          Sign out
+        </button>
+      </template>
+      <RouterLink v-else :to="authLink" aria-label="Sign in"
+        :class="['px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all',
+          trip.state.trip.bannerUrl
+            ? 'text-white/80 hover:text-white hover:bg-white/20'
+            : 'text-slate-500 dark:text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-50 dark:hover:bg-inset']">
+        Sign in
+      </RouterLink>
+
       <!-- Theme toggle -->
       <button @click="ui.toggleDark()" :aria-label="ui.darkMode ? 'Light mode' : 'Dark mode'"
         :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all',
@@ -416,6 +454,14 @@ async function onBannerFileChange(e: Event) {
             </svg>
           </button>
         </template>
+        <RouterLink v-if="!auth.isAuthenticated" :to="authLink" aria-label="Sign in"
+          class="w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset transition-all">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        </RouterLink>
+        <button v-else type="button" @click="auth.signOut()" aria-label="Sign out"
+          class="w-10 h-10 flex items-center justify-center rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset transition-all">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
         <button @click="tripsOpen = !tripsOpen" aria-label="My Trips"
           :class="['relative w-10 h-10 flex items-center justify-center rounded-xl transition-all',
             tripsOpen ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-inset' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']">

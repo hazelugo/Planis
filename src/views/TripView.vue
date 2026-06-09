@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppBottomNav from '@/components/layout/AppBottomNav.vue'
@@ -15,7 +15,7 @@ import { useTrip } from '@/composables/useTrip'
 const currentTab = ref('overview')
 const trip = useTripStore()
 const ui = useUIStore()
-const { resolveEditToken } = useTrip()
+const { resolveTripId, resolveEditToken } = useTrip()
 
 function retryLoad() {
   trip.retryLoad(resolveEditToken(trip.tripId))
@@ -38,6 +38,21 @@ const TABS: Record<string, typeof OverviewTab> = {
   splitter:   SplitterTab,
   // photos:  PhotosTab,
 }
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') trip.ensureRealtimeSubscription()
+}
+
+onMounted(async () => {
+  const tripId = resolveTripId()
+  await trip.initialize(tripId, resolveEditToken(tripId))
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  trip.unsubscribeFromRealTime()
+})
 </script>
 
 <template>

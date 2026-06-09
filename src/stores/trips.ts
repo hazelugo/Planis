@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth'
 import { computeSettlements } from '@/utils/settlements'
 import { persistEditToken } from '@/composables/useTrip'
 import { daysUntil, tripDurationDays } from '@/utils/dates'
@@ -92,11 +93,20 @@ export const useTripStore = defineStore('trip', () => {
     if (!tripId.value || !canEdit.value) return
     try {
       syncStatus.value = 'saving'
-      const { error } = await supabase.from('trips').upsert({
+      const auth = useAuthStore()
+      const row: {
+        id: string
+        data: TripState
+        updated_at: string
+        owner_id?: string
+      } = {
         id: tripId.value,
         data: JSON.parse(JSON.stringify(state)) as TripState,
         updated_at: new Date().toISOString(),
-      })
+      }
+      if (auth.user?.id) row.owner_id = auth.user.id
+
+      const { error } = await supabase.from('trips').upsert(row)
       if (error) throw error
       hasSynced.value = true
       syncStatus.value = 'saved'
@@ -160,43 +170,85 @@ export const useTripStore = defineStore('trip', () => {
   }
 
   // ── Real-time subscription ────────────────────────────────────────────────
-  // Initialized once; survives tab navigation because the store is a singleton.
+  // Lives for the page lifetime (like the CDN app). Do NOT unsubscribe on
+  // pagehide — that fires when switching browser tabs and kills background sync.
   let channel: ReturnType<typeof supabase.channel> | null = null
+  let subscribedTripId: string | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  function applyRemoteTripData(row: Record<string, unknown>): void {
+    if (!row.data) return
+    remoteUpdate = true
+    Object.assign(state, row.data as TripState)
+    hasSynced.value = true
+    syncStatus.value = 'saved'
+    setTimeout(() => {
+      remoteUpdate = false
+      if (syncStatus.value === 'saved') syncStatus.value = 'idle'
+    }, 0)
+  }
+
+  const realtimeFilter = () =>
+    ({
+      schema: 'public',
+      table: 'trips',
+      filter: `id=eq.${tripId.value}`,
+    }) as const
 
   function subscribeToRealTime(): void {
-    if (channel) return // already subscribed — guard against double-init
     if (!tripId.value) return
+    if (channel && subscribedTripId === tripId.value) return
+
+    unsubscribeFromRealTime()
+
+    const id = tripId.value
+    subscribedTripId = id
 
     channel = supabase
-      .channel(`trip:${tripId.value}`)
+      .channel(`trip:${id}`)
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'trips',
-          filter: `id=eq.${tripId.value}`,
-        },
+        { event: 'INSERT', ...realtimeFilter() },
         (payload) => {
-          if (payload.new && 'data' in payload.new && payload.new.data) {
-            remoteUpdate = true
-            Object.assign(state, payload.new.data as TripState)
-            syncStatus.value = 'saved'
-            setTimeout(() => {
-              remoteUpdate = false
-              if (syncStatus.value === 'saved') syncStatus.value = 'idle'
-            }, 0)
-          }
+          if (payload.new) applyRemoteTripData(payload.new as Record<string, unknown>)
         }
       )
-      .subscribe()
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', ...realtimeFilter() },
+        (payload) => {
+          if (payload.new) applyRemoteTripData(payload.new as Record<string, unknown>)
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') return
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          unsubscribeFromRealTime()
+          if (reconnectTimer) clearTimeout(reconnectTimer)
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null
+            if (tripId.value === id && loadStatus.value === 'ready') subscribeToRealTime()
+          }, 2000)
+        }
+      })
+  }
+
+  /** Reconnect if the websocket dropped while the tab was in the background. */
+  function ensureRealtimeSubscription(): void {
+    if (loadStatus.value !== 'ready' || !tripId.value) return
+    if (!channel || subscribedTripId !== tripId.value) subscribeToRealTime()
   }
 
   function unsubscribeFromRealTime(): void {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
     if (channel) {
       supabase.removeChannel(channel)
       channel = null
     }
+    subscribedTripId = null
   }
 
   // ── Banner URL cache (localStorage) ─────────────────────────────────────
@@ -478,6 +530,7 @@ export const useTripStore = defineStore('trip', () => {
     importTripData,
     saveTrip,
     subscribeToRealTime,
+    ensureRealtimeSubscription,
     unsubscribeFromRealTime,
     // Event actions
     addEvent,

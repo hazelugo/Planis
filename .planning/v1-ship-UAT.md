@@ -52,8 +52,8 @@ Automated + code verification after production deploy. Interactive realtime test
 **Result:** PASS — `if (channel) return` guard in `subscribeToRealTime()`; `unsubscribeFromRealTime()` on `pagehide`.
 
 ### 9. Two-tab realtime sync
-**Expected:** Edit in tab A → tab B updates within ~1s without refresh.  
-**Result:** SPOT-CHECK — Supabase `postgres_changes` listener wired correctly; confirm manually with two browser tabs on a live trip.
+**Expected:** Edit in tab A → tab B updates within ~1s without refresh (after 1.4s debounced save).  
+**Result:** FIXED 2026-06-09 — `pagehide` was unsubscribing background tabs; removed. Subscription now matches CDN app (page lifetime). Also listens for INSERT (first save) + UPDATE, with reconnect on channel error.
 
 ### 10. `removeFriend` settledPairs cleanup
 **Expected:** Removing a crew member clears their settlement keys.  
