@@ -13,6 +13,7 @@ interface PexelsPhoto {
 export function useBanner() {
   const trip = useTripStore()
   const loading = ref(false)
+  const pexelsConfigured = !!PEXELS_KEY
   const pageOffset = ref(0)
   let debounceTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -22,13 +23,13 @@ export function useBanner() {
       if (dest !== prev) pageOffset.value = 0
       clearTimeout(debounceTimer)
       // Skip auto-fetch if a banner is already set (preserves user choice)
-      if (!dest || trip.state.trip.bannerUrl) return
+      if (!dest || trip.state.trip.bannerUrl || !trip.canEdit) return
       debounceTimer = setTimeout(() => _fetch(dest, 0), 800)
     }
   )
 
   async function _fetch(destination: string, page: number): Promise<number> {
-    if (!destination || !PEXELS_KEY) return 0
+    if (!destination || !PEXELS_KEY || !trip.canEdit) return 0
     loading.value = true
     try {
       const searchTerm = destination.split(',')[0].trim()
@@ -56,6 +57,7 @@ export function useBanner() {
 
   // Explicitly bypass the skip condition and load the next Pexels result
   async function tryAnother() {
+    if (!trip.canEdit) return
     const dest = trip.state.trip.destination
     if (!dest) return
     pageOffset.value += 1
@@ -67,10 +69,12 @@ export function useBanner() {
   }
 
   function setPosition(x: number, y: number) {
+    if (!trip.canEdit) return
     trip.state.trip.bannerPosition = `${Math.round(x)}% ${Math.round(y)}%`
   }
 
   async function uploadBanner(file: File) {
+    if (!trip.canEdit) return
     if (file.size > 10 * 1024 * 1024) return
     loading.value = true
     try {
@@ -92,5 +96,5 @@ export function useBanner() {
     loading.value = false
   }
 
-  return { loading, tryAnother, setPosition, uploadBanner }
+  return { loading, pexelsConfigured, tryAnother, setPosition, uploadBanner }
 }

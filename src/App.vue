@@ -8,7 +8,7 @@ import { storeToRefs } from 'pinia'
 
 const ui = useUIStore()
 const trip = useTripStore()
-const { resolveTripId } = useTrip()
+const { resolveTripId, resolveEditToken } = useTrip()
 const { confirm } = storeToRefs(ui)
 const { confirmOk, confirmCancel } = ui
 
@@ -19,7 +19,8 @@ function onPageShow(e: PageTransitionEvent) { if (e.persisted) trip.subscribeToR
 
 onMounted(async () => {
   ui.initDarkMode()
-  await trip.initialize(resolveTripId())
+  const tripId = resolveTripId()
+  await trip.initialize(tripId, resolveEditToken(tripId))
   window.addEventListener('pagehide', onPageHide)
   window.addEventListener('pageshow', onPageShow)
 })

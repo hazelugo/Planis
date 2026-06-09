@@ -9,9 +9,27 @@ import SpendingTab from '@/views/tabs/SpendingTab.vue'
 import SplitterTab from '@/views/tabs/SplitterTab.vue'
 // import PhotosTab from '@/views/tabs/PhotosTab.vue'
 import { useTripStore } from '@/stores/trips'
+import { useUIStore } from '@/stores/ui'
+import { useTrip } from '@/composables/useTrip'
 
 const currentTab = ref('overview')
 const trip = useTripStore()
+const ui = useUIStore()
+const { resolveEditToken } = useTrip()
+
+function retryLoad() {
+  trip.retryLoad(resolveEditToken(trip.tripId))
+}
+
+async function protectTrip() {
+  const ok = await ui.showConfirm({
+    title: 'Protect this trip?',
+    message: 'You\'ll get a private editor link (?edit=…). Share the link without ?edit so others can view but not change anything.',
+    okLabel: 'Protect trip',
+    okClass: 'bg-teal-600 hover:bg-teal-700',
+  })
+  if (ok) trip.protectTrip()
+}
 
 const TABS: Record<string, typeof OverviewTab> = {
   overview:   OverviewTab,
@@ -23,7 +41,19 @@ const TABS: Record<string, typeof OverviewTab> = {
 </script>
 
 <template>
-  <div class="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#0f1117]">
+  <div v-if="trip.loadStatus === 'loading'" class="flex h-screen items-center justify-center bg-slate-50 dark:bg-[#0f1117] text-slate-500 dark:text-slate-400 text-sm">
+    Loading trip…
+  </div>
+
+  <div v-else-if="trip.loadStatus === 'error'" class="flex h-screen flex-col items-center justify-center gap-4 bg-slate-50 dark:bg-[#0f1117] px-6 text-center">
+    <p class="text-slate-700 dark:text-slate-200 font-medium">Couldn't load this trip</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm">{{ trip.loadError }}</p>
+    <button type="button" @click="retryLoad" class="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition-colors">
+      Try again
+    </button>
+  </div>
+
+  <div v-else class="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#0f1117]">
     <!-- Sidebar (desktop) -->
     <AppSidebar :current-tab="currentTab" @tab="currentTab = $event" />
 
@@ -31,8 +61,19 @@ const TABS: Record<string, typeof OverviewTab> = {
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
       <AppHeader :current-tab="currentTab" :sync-status="trip.syncStatus" />
 
+      <div v-if="trip.isReadOnly" class="shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800/30 text-center text-xs text-amber-800 dark:text-amber-300">
+        View-only — ask the trip organizer for the editor link to make changes.
+      </div>
+
+      <div v-else-if="trip.needsProtection" class="shrink-0 px-4 py-2.5 bg-teal-50 dark:bg-teal-900/20 border-b border-teal-100 dark:border-teal-800/30 flex flex-wrap items-center justify-center gap-2 text-xs text-teal-800 dark:text-teal-300">
+        <span>Anyone with this link can edit.</span>
+        <button type="button" @click="protectTrip" class="font-semibold underline underline-offset-2 hover:text-teal-900 dark:hover:text-teal-200">
+          Get private editor link
+        </button>
+      </div>
+
       <!-- Content -->
-      <main class="flex-1 overflow-y-auto px-4 pt-5 pb-28 lg:p-8">
+      <main class="flex-1 overflow-y-auto px-4 pt-5 pb-28 lg:p-8" :inert="trip.isReadOnly">
         <div class="max-w-5xl mx-auto">
           <Transition name="fade" mode="out-in">
             <component :is="TABS[currentTab]" :key="currentTab" />

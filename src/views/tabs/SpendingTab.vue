@@ -41,6 +41,13 @@ const selectedBreakdown = computed(() =>
 function fmt(n: number) { return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n) }
 function pct(n: number) { return grand.value > 0 ? Math.round(n / grand.value * 100) : 0 }
 
+const donutAriaLabel = computed(() => {
+  const parts = breakdown.value
+    .filter(b => b.total > 0)
+    .map(b => `${b.key} ${pct(b.total)}% ($${fmt(b.total)})`)
+  return `Spending breakdown: ${parts.join(', ')}. Total $${fmt(grand.value)}.`
+})
+
 // Donut — r=80, enforce minimum arc of 12px so tiny slices stay clickable
 const R = 80
 const CIRC = 2 * Math.PI * R
@@ -85,7 +92,7 @@ const slices = computed(() => {
 
         <!-- Donut -->
         <div class="relative shrink-0" style="width:200px;height:200px">
-          <svg width="200" height="200" viewBox="0 0 200 200">
+          <svg width="200" height="200" viewBox="0 0 200 200" role="img" :aria-label="donutAriaLabel">
             <circle cx="100" cy="100" :r="R" fill="none"
               class="stroke-slate-100 dark:stroke-[#253047]" stroke-width="28" />
             <circle v-for="s in slices" :key="s.key"
@@ -122,6 +129,7 @@ const slices = computed(() => {
         <!-- Legend -->
         <div class="flex-1 w-full space-y-1.5">
           <button v-for="b in breakdown.filter(b => b.total > 0)" :key="b.key"
+            :aria-label="`${b.key}: $${fmt(b.total)}, ${pct(b.total)}% of total`"
             class="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors text-left"
             :class="selected === b.key ? '' : 'hover:bg-slate-50 dark:hover:bg-inset'"
             :style="selected === b.key ? `background:${ui.darkMode ? b.darkBg : b.light};outline:2px solid ${b.color};outline-offset:-2px;border-radius:0.75rem` : ''"
@@ -178,7 +186,7 @@ const slices = computed(() => {
             </div>
             <div class="text-right shrink-0">
               <p class="text-sm font-bold text-slate-700 dark:text-slate-300">${{ fmt(e.perPerson ? e.cost * totalParticipants : e.cost) }}</p>
-              <p v-if="e.perPerson && totalParticipants > 1" class="text-[11px] text-slate-400">${{ fmt(e.cost) }}/pp</p>
+              <p v-if="e.perPerson && totalParticipants > 1" class="text-[11px] text-slate-500 dark:text-slate-400">${{ fmt(e.cost) }} / person</p>
             </div>
           </div>
         </div>

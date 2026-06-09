@@ -234,7 +234,7 @@ async function removePayment(id: string) {
       <div class="flex gap-2">
         <input v-model="newFriendName" @keydown.enter="addFriendLocal" type="text" aria-label="Add crew member" placeholder="Add a name…" maxlength="50"
           class="flex-1 min-w-0 px-3.5 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500" />
-        <button @click="addFriendLocal" :disabled="!newFriendName.trim()"
+        <button @click="addFriendLocal" :disabled="!newFriendName.trim()" aria-label="Add crew member"
           class="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 transition-colors disabled:opacity-40 bg-teal-600 hover:bg-teal-700">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
@@ -253,8 +253,8 @@ async function removePayment(id: string) {
           <span class="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate w-full text-center">{{ f.name }}</span>
           <button @click="trip.removeFriend(f.id)"
             :aria-label="`Remove ${f.name}`"
-            class="absolute top-1 right-1 w-6 h-6 rounded-full bg-surface text-slate-300 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 shadow-sm transition-all lg:opacity-0 lg:group-hover:opacity-100 flex items-center justify-center">
-            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            class="absolute -top-1 -right-1 w-10 h-10 rounded-full bg-surface text-slate-400 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 shadow-sm transition-all lg:opacity-0 lg:group-hover:opacity-100 flex items-center justify-center">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
       </div>

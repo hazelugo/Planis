@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useTripStore } from '@/stores/trips'
+import { addDaysIso, daysBetween, localTodayIso } from '@/utils/dates'
 
 const trip = useTripStore()
 
@@ -70,14 +71,14 @@ async function fetchWeather() {
       return
     }
     const { lat, lon } = coords
-    const today = new Date().toISOString().slice(0, 10)
-    const maxEnd = new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10)
+    const today = localTodayIso()
+    const maxEnd = addDaysIso(today, 15)
     const tripStart = trip.state.trip.startDate && trip.state.trip.startDate >= today
       ? trip.state.trip.startDate : today
 
     // Trip beyond 15-day forecast window — show a helpful message instead of misleading current conditions
     if (tripStart > maxEnd) {
-      const daysAway = Math.ceil((new Date(tripStart).getTime() - (Date.now() + 15 * 86400000)) / 86400000)
+      const daysAway = daysBetween(maxEnd, tripStart)
       weatherNote.value = daysAway > 7
         ? 'Forecast not available yet — check back closer to departure.'
         : `Forecast available in ~${daysAway} day${daysAway !== 1 ? 's' : ''}.`
@@ -87,7 +88,7 @@ async function fetchWeather() {
     }
 
     const endRaw = trip.state.trip.endDate && trip.state.trip.endDate > tripStart
-      ? trip.state.trip.endDate : new Date(Date.now() + 6 * 86400000).toISOString().slice(0, 10)
+      ? trip.state.trip.endDate : addDaysIso(today, 6)
     const end = endRaw > maxEnd ? maxEnd : endRaw
 
     const wData = await fetch(
@@ -144,16 +145,6 @@ const perPerson = computed(() =>
 const budgetUsed = computed(() =>
   trip.state.budget > 0 ? Math.min(100, Math.round((totalEventCost.value / trip.state.budget) * 100)) : 0
 )
-
-const daysUntil = computed(() => {
-  if (!trip.state.trip.startDate) return null
-  return Math.ceil((new Date(trip.state.trip.startDate).getTime() - Date.now()) / 86400000)
-})
-
-const tripDuration = computed(() => {
-  if (!trip.state.trip.startDate || !trip.state.trip.endDate) return 0
-  return Math.ceil((new Date(trip.state.trip.endDate).getTime() - new Date(trip.state.trip.startDate).getTime()) / 86400000)
-})
 
 const destEditing = ref(false)
 const destQuery = ref(trip.state.trip.destination)
@@ -263,7 +254,7 @@ function fmtDate(d: string) {
       <div class="lg:col-span-3 bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-7 space-y-5">
         <!-- Destination: click-to-edit with autocomplete -->
         <div class="relative">
-          <button v-if="!destEditing" @click="startDestEdit"
+          <button v-if="!destEditing" @click="startDestEdit" aria-label="Edit destination"
             class="w-full text-left group flex items-center gap-2 min-w-0">
             <span class="truncate block" :class="trip.state.trip.destination ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500'"
               style="font-size:1.75rem;font-weight:700;line-height:1.2;letter-spacing:-0.01em">
@@ -311,19 +302,20 @@ function fmtDate(d: string) {
         <!-- Duration + budget -->
         <div class="flex items-center gap-3 pt-1 border-t border-slate-100 dark:border-hairline">
           <div class="flex items-center gap-1.5 shrink-0">
-            <span v-if="tripDuration > 0" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-              {{ tripDuration }} days
+            <span v-if="trip.tripDuration > 0" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+              {{ trip.tripDuration }} days
             </span>
-            <span v-if="daysUntil !== null && daysUntil > 0" class="text-xs text-slate-500 dark:text-slate-400">· {{ daysUntil }} to go</span>
-            <span v-else-if="daysUntil === 0" class="text-xs text-teal-600 dark:text-teal-400 font-semibold">· 🎉 Today!</span>
-            <span v-else-if="!tripDuration" class="text-xs text-slate-500 dark:text-slate-400 italic">Set dates to see duration</span>
+            <span v-if="trip.daysUntilTrip !== null && trip.daysUntilTrip > 0" class="text-xs text-slate-500 dark:text-slate-400">· {{ trip.daysUntilTrip }} to go</span>
+            <span v-else-if="trip.daysUntilTrip === 0" class="text-xs text-teal-600 dark:text-teal-400 font-semibold">· 🎉 Today!</span>
+            <span v-else-if="!trip.tripDuration" class="text-xs text-slate-500 dark:text-slate-400 italic">Set dates to see duration</span>
           </div>
-          <div class="ml-auto flex items-center gap-1.5 shrink-0">
+          <div class="ml-auto flex items-center gap-1.5 shrink-0 group">
             <label for="trip-budget" class="eyebrow cursor-pointer">Budget</label>
-            <div class="relative flex items-center">
-              <span class="absolute left-0 text-slate-400 text-sm pointer-events-none" :class="trip.state.budget ? '' : 'opacity-0'">$</span>
+            <div class="relative flex items-center gap-1">
+              <span class="absolute left-0 text-slate-500 text-sm pointer-events-none" :class="trip.state.budget ? '' : 'opacity-0'">$</span>
               <input id="trip-budget" v-model.number="trip.state.budget" type="number" min="0" step="100" placeholder="—"
-                class="w-20 pl-3.5 text-sm font-semibold bg-transparent border-b border-transparent hover:border-slate-200 dark:hover:border-hairline focus:border-teal-400 focus:outline-none text-slate-700 dark:text-slate-300 placeholder-slate-300 dark:placeholder-slate-600 transition-colors text-right" />
+                class="w-20 pl-3.5 text-sm font-semibold bg-transparent border-b border-transparent hover:border-slate-200 dark:hover:border-hairline focus:border-teal-400 focus:outline-none text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 transition-colors text-right" />
+              <svg class="shrink-0 opacity-0 group-hover:opacity-40 transition-opacity text-slate-400" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </div>
           </div>
         </div>
@@ -339,7 +331,7 @@ function fmtDate(d: string) {
           <div class="flex items-end gap-3 mt-1.5">
             <p class="cost-hero-number text-white leading-none">${{ fmt(totalEventCost) }}</p>
             <span v-if="perPerson > 0" class="mb-1.5 px-2.5 py-1 rounded-full bg-white/20 text-white text-xs font-bold whitespace-nowrap">
-              ${{ fmt(perPerson) }} pp
+              ${{ fmt(perPerson) }} / person
             </span>
           </div>
         </div>
@@ -378,8 +370,8 @@ function fmtDate(d: string) {
     </div>
 
     <!-- Stats strip -->
-    <div v-if="trip.state.trip.destination || trip.state.friends.length || trip.state.events.length || tripDuration > 0"
-      :class="['bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm divide-x divide-slate-100 dark:divide-hairline grid grid-cols-2 overflow-hidden', perPerson > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3']">
+    <div v-if="trip.state.trip.destination || trip.state.friends.length || trip.state.events.length || trip.tripDuration > 0"
+      :class="['bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm grid grid-cols-2 overflow-hidden divide-y divide-slate-100 dark:divide-hairline lg:divide-y-0 lg:divide-x', perPerson > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3']">
 
       <!-- Travelers -->
       <div class="px-5 py-4 flex flex-col gap-1.5">
@@ -402,8 +394,8 @@ function fmtDate(d: string) {
       <!-- Duration -->
       <div class="px-5 py-4 flex flex-col gap-1.5">
         <p class="eyebrow">Duration</p>
-        <p class="text-2xl font-black text-slate-800 dark:text-slate-100 leading-none">{{ tripDuration || '—' }}</p>
-        <p class="text-xs text-slate-500 dark:text-slate-400">{{ tripDuration > 0 ? 'days' : 'Set dates above' }}</p>
+        <p class="text-2xl font-black text-slate-800 dark:text-slate-100 leading-none">{{ trip.tripDuration || '—' }}</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">{{ trip.tripDuration > 0 ? 'days' : 'Set dates above' }}</p>
       </div>
 
       <!-- Events -->

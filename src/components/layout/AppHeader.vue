@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useUIStore } from '@/stores/ui'
 import { useTripStore } from '@/stores/trips'
 import { useTrip } from '@/composables/useTrip'
@@ -13,7 +13,7 @@ const emit = defineEmits<{ (e: 'copy-link'): void }>()
 
 const ui = useUIStore()
 const trip = useTripStore()
-const { navigateToTrip } = useTrip()
+const { navigateToTrip, getShareUrl, resolveEditToken, buildTripUrl } = useTrip()
 
 const banner = useBanner()
 const repositionMode = ref(false)
@@ -40,7 +40,10 @@ function fmtDate(d: string) {
 }
 
 function copyLink() {
-  navigator.clipboard.writeText(window.location.href).catch(() => {})
+  const url = trip.canEdit
+    ? getShareUrl(trip.tripId, resolveEditToken(trip.tripId))
+    : buildTripUrl(trip.tripId)
+  navigator.clipboard.writeText(url).catch(() => {})
   linkCopied.value = true
   emit('copy-link')
   setTimeout(() => { linkCopied.value = false }, 1600)
@@ -64,9 +67,9 @@ async function deleteTrip(id: string) {
 }
 
 function copyTripLink(id: string) {
-  const url = new URL(window.location.href)
-  url.searchParams.set('trip', id)
-  navigator.clipboard.writeText(url.toString()).catch(() => {})
+  const edit = resolveEditToken(id)
+  const url = edit ? buildTripUrl(id, edit) : buildTripUrl(id)
+  navigator.clipboard.writeText(url).catch(() => {})
   copiedTripId.value = id
   setTimeout(() => { copiedTripId.value = null }, 1600)
 }
@@ -81,19 +84,57 @@ function startNewTrip() {
   navigateToTrip(crypto.randomUUID())
 }
 
-const syncLabel: Record<string, string> = { saving: 'Saving…', saved: 'Saved', error: 'Save failed', idle: 'Saved' }
-const syncClass: Record<string, string> = {
-  saving: 'bg-amber-50 text-amber-700',
-  saved:  'bg-emerald-50 text-emerald-700',
-  error:  'bg-rose-50 text-rose-600',
-  idle:   'bg-emerald-50 text-emerald-700',
+async function importFromTrip(fromId: string) {
+  const name = trip.tripIndex.find(t => t.id === fromId)?.name || 'that trip'
+  const ok = await ui.showConfirm({
+    title: `Copy data from "${name}"?`,
+    message: 'This replaces everything in the current trip with the other trip\'s data. The current trip link stays the same.',
+    okLabel: 'Copy data',
+    okClass: 'bg-teal-600 hover:bg-teal-700',
+  })
+  if (!ok) return
+  const result = await trip.importTripData(fromId)
+  tripsOpen.value = false
+  if (result === 'ok') return
+  await ui.showConfirm({
+    title: result === 'not-found' ? 'Trip not found' : 'Could not copy',
+    message: result === 'not-found'
+      ? 'That trip has no saved data yet.'
+      : 'Check your connection and try again.',
+    okLabel: 'OK',
+    okClass: 'bg-teal-600 hover:bg-teal-700',
+  })
 }
-const syncDot: Record<string, string> = {
-  saving: 'bg-amber-400 animate-pulse',
-  saved:  'bg-emerald-500',
-  error:  'bg-rose-500',
-  idle:   'bg-emerald-500',
-}
+
+const syncLabel = computed(() => {
+  const labels: Record<string, string> = {
+    saving: 'Saving…',
+    saved: 'Saved',
+    error: 'Save failed',
+    idle: trip.hasSynced ? 'Saved' : 'Not saved yet',
+  }
+  return labels[props.syncStatus]
+})
+const syncClass = computed(() => {
+  const classes: Record<string, string> = {
+    saving: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+    saved: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400',
+    error: 'bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400',
+    idle: trip.hasSynced
+      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+      : 'bg-slate-50 text-slate-500 dark:bg-inset dark:text-slate-400',
+  }
+  return classes[props.syncStatus]
+})
+const syncDot = computed(() => {
+  const dots: Record<string, string> = {
+    saving: 'bg-amber-400 animate-pulse',
+    saved: 'bg-emerald-500',
+    error: 'bg-rose-500',
+    idle: trip.hasSynced ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
+  }
+  return dots[props.syncStatus]
+})
 
 function parsePct(pos: string): [number, number] {
   const parts = (pos || '50% 50%').split(' ').map(p => parseFloat(p))
@@ -152,6 +193,9 @@ async function onBannerFileChange(e: Event) {
         :src="trip.state.trip.bannerUrl"
         :style="`object-position: ${trip.state.trip.bannerPosition ?? '50% 50%'}`"
         class="absolute inset-0 w-full h-full object-cover select-none"
+        width="1200"
+        height="180"
+        fetchpriority="high"
         draggable="false"
         alt=""
       />
@@ -190,7 +234,7 @@ async function onBannerFileChange(e: Event) {
       <div class="hidden lg:flex items-center gap-2 shrink-0">
 
       <!-- Banner controls (desktop) -->
-      <div v-if="trip.state.trip.bannerUrl" class="flex items-center gap-1 mr-1">
+      <div v-if="trip.state.trip.bannerUrl && trip.canEdit" class="flex items-center gap-1 mr-1">
         <!-- Reposition -->
         <button
           @click="repositionMode = !repositionMode"
@@ -208,10 +252,10 @@ async function onBannerFileChange(e: Event) {
         <!-- Try another -->
         <button
           @click="banner.tryAnother()"
-          :disabled="banner.loading.value"
+          :disabled="banner.loading.value || !banner.pexelsConfigured"
           class="w-8 h-8 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/20 disabled:opacity-40 transition-all"
           aria-label="Load another Pexels photo"
-          title="Try another photo"
+          :title="banner.pexelsConfigured ? 'Try another photo' : 'Pexels not configured — upload your own photo'"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
@@ -242,7 +286,7 @@ async function onBannerFileChange(e: Event) {
 
       <!-- My Trips dropdown -->
       <div class="relative">
-        <button @click="tripsOpen = !tripsOpen"
+        <button @click="tripsOpen = !tripsOpen" aria-label="My Trips"
           :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
             trip.state.trip.bannerUrl
               ? tripsOpen
@@ -276,9 +320,16 @@ async function onBannerFileChange(e: Event) {
                   </p>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
+                  <button v-if="t.id !== trip.tripId && trip.canEdit" @click="importFromTrip(t.id)"
+                    class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-lift transition-all"
+                    aria-label="Copy this trip's data into current trip"
+                    title="Copy into current trip">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </button>
                   <button v-if="t.id !== trip.tripId" @click="switchTrip(t.id)"
                     class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-lift transition-all"
-                    aria-label="Switch to this trip">
+                    aria-label="Switch to this trip"
+                    title="Open this trip">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                   </button>
                   <button @click="copyTripLink(t.id)"
@@ -311,9 +362,9 @@ async function onBannerFileChange(e: Event) {
       </div>
 
       <!-- Sync pill -->
-      <div :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors', syncClass[syncStatus]]">
-        <span :class="['w-1.5 h-1.5 rounded-full', syncDot[syncStatus]]"></span>
-        {{ syncLabel[syncStatus] }}
+      <div :class="['flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors', syncClass]">
+        <span :class="['w-1.5 h-1.5 rounded-full', syncDot]"></span>
+        {{ syncLabel }}
       </div>
 
       <!-- Copy link -->
@@ -340,7 +391,7 @@ async function onBannerFileChange(e: Event) {
       <!-- Mobile: briefcase icon + theme toggle -->
       <div class="lg:hidden flex items-center gap-1 shrink-0">
         <!-- Mobile banner controls -->
-        <template v-if="trip.state.trip.bannerUrl">
+        <template v-if="trip.state.trip.bannerUrl && trip.canEdit">
           <button
             @click="repositionMode = !repositionMode"
             :class="['w-10 h-10 flex items-center justify-center rounded-xl transition-all',
@@ -411,13 +462,20 @@ async function onBannerFileChange(e: Event) {
               </p>
             </div>
             <div class="flex items-center gap-1 shrink-0">
+              <button v-if="t.id !== trip.tripId && trip.canEdit" @click="importFromTrip(t.id)"
+                class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-lift transition-all"
+                aria-label="Copy into current trip" title="Copy into current trip">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
               <button v-if="t.id !== trip.tripId" @click="switchTrip(t.id)"
-                class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-lift transition-all">
+                class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-teal-50 dark:hover:bg-lift transition-all"
+                aria-label="Open this trip" title="Open this trip">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               </button>
               <button @click="copyTripLink(t.id)"
                 :class="['w-8 h-8 flex items-center justify-center rounded-lg transition-all',
-                  copiedTripId === t.id ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-lift' : 'text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-lift']">
+                  copiedTripId === t.id ? 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-lift' : 'text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-lift']"
+                :aria-label="copiedTripId === t.id ? 'Copied!' : 'Copy link'">
                 <svg v-if="copiedTripId !== t.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               </button>

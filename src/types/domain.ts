@@ -68,6 +68,8 @@ export interface TripState {
   payments: Payment[]
   settledPairs: string[]   // "fromId→toId" keys for settled debts
   photos: Photo[]
+  /** Required in URL (?edit=) to write; absent on legacy trips (open edit). */
+  editToken?: string
 }
 
 // Settlement algorithm output — derived at runtime, never persisted.

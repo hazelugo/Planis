@@ -17,6 +17,8 @@ const tabs = [
       v-for="tab in tabs"
       :key="tab.id"
       @click="emit('tab', tab.id)"
+      :aria-label="tab.label"
+      :aria-current="currentTab === tab.id ? 'page' : undefined"
       :class="[
         'flex-1 flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold transition-colors',
         currentTab === tab.id

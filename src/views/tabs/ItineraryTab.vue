@@ -66,6 +66,23 @@ function onDrop(e: DragEvent, targetId: string) {
 }
 function onDragEnd() { draggedId.value = null; dragOverId.value = null }
 
+function moveEvent(id: string, delta: -1 | 1) {
+  const list = sortedEvents.value
+  const idx = list.findIndex(e => e.id === id)
+  const targetIdx = idx + delta
+  if (idx < 0 || targetIdx < 0 || targetIdx >= list.length) return
+  const from = trip.state.events.findIndex(e => e.id === id)
+  const to = trip.state.events.findIndex(e => e.id === list[targetIdx].id)
+  if (from !== -1 && to !== -1) trip.reorderEvents(from, to)
+}
+
+function canMoveEvent(id: string, delta: -1 | 1) {
+  const idx = sortedEvents.value.findIndex(e => e.id === id)
+  if (idx < 0) return false
+  const targetIdx = idx + delta
+  return targetIdx >= 0 && targetIdx < sortedEvents.value.length
+}
+
 // ── Sorted + filtered + grouped ───────────────────────────────────────────
 const totalParticipants = computed(() => trip.state.friends.length || trip.state.attendance.adults + trip.state.attendance.kids)
 
@@ -313,7 +330,7 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
               class="w-full pl-9 pr-3 py-2 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500" />
           </div>
           <!-- Filter toggle -->
-          <button @click="showFilters = !showFilters"
+          <button @click="showFilters = !showFilters" aria-label="Filter by cost"
             :class="['flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all shrink-0',
               showFilters || costMin !== '' || costMax !== ''
                 ? 'bg-teal-50 dark:bg-inset border-teal-200 dark:border-teal-700 text-teal-700 dark:text-teal-400'
@@ -322,14 +339,14 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
             Cost
           </button>
           <!-- Export PDF -->
-          <button @click="exportPDF"
+          <button @click="exportPDF" aria-label="Export itinerary to PDF"
             class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset transition-all shrink-0"
             title="Export to PDF">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             PDF
           </button>
           <!-- Clear -->
-          <button v-if="hasFilter" @click="clearFilters"
+          <button v-if="hasFilter" @click="clearFilters" aria-label="Clear filters"
             class="flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-transparent transition-all shrink-0">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             Clear
@@ -381,7 +398,7 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
 
                 <!-- Inline edit -->
                 <div v-if="editingId === event.id" :key="event.id + '-edit'"
-                  class="ml-10 bg-surface rounded-2xl border-2 border-teal-300 dark:border-teal-700 shadow-md p-5 mb-2">
+                  class="relative z-20 ml-10 bg-surface rounded-2xl border-2 border-teal-300 dark:border-teal-700 shadow-md p-5 mb-2">
                   <p class="eyebrow text-teal-600 dark:text-teal-400 mb-4">Editing Event</p>
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div class="sm:col-span-2">
@@ -478,9 +495,19 @@ ${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;colo
                       </div>
                       <div class="text-right shrink-0 ml-2">
                         <p class="font-bold text-slate-700 dark:text-slate-300 text-sm">${{ fmt(event.perPerson ? event.cost * totalParticipants : event.cost) }}</p>
-                        <p v-if="event.perPerson && totalParticipants > 1" class="text-[11px] text-slate-400 mt-0.5">${{ fmt(event.cost) }}/pp</p>
+                        <p v-if="event.perPerson && totalParticipants > 1" class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${{ fmt(event.cost) }} / person</p>
                       </div>
                       <div class="print:hidden flex flex-col gap-0.5 shrink-0 lg:opacity-0 lg:group-hover:opacity-100 transition-all">
+                        <button v-if="canMoveEvent(event.id, -1)" @click="moveEvent(event.id, -1)"
+                          aria-label="Move event up"
+                          class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+                        </button>
+                        <button v-if="canMoveEvent(event.id, 1)" @click="moveEvent(event.id, 1)"
+                          aria-label="Move event down"
+                          class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
                         <a :href="`https://maps.google.com/?q=${encodeURIComponent(event.name + (trip.state.trip.destination ? ' ' + trip.state.trip.destination : ''))}`"
                           target="_blank" rel="noopener"
                           aria-label="View on Google Maps"

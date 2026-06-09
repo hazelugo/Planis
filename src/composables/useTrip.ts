@@ -1,6 +1,28 @@
 // src/composables/useTrip.ts
 
 const STORAGE_KEY = 'travelapp_trip_id'
+export const EDIT_TOKEN_STORAGE_PREFIX = 'travelapp_edit_'
+
+export function persistEditToken(tripId: string, token: string): void {
+  localStorage.setItem(EDIT_TOKEN_STORAGE_PREFIX + tripId, token)
+}
+
+export function resolveEditToken(tripId: string): string | null {
+  const fromUrl = new URLSearchParams(window.location.search).get('edit')
+  if (fromUrl) {
+    persistEditToken(tripId, fromUrl)
+    return fromUrl
+  }
+  return localStorage.getItem(EDIT_TOKEN_STORAGE_PREFIX + tripId)
+}
+
+/** Build a shareable trip URL. Include editToken only for editor links. */
+export function buildTripUrl(tripId: string, editToken?: string | null): string {
+  const url = new URL(window.location.origin + window.location.pathname)
+  url.searchParams.set('trip', tripId)
+  if (editToken) url.searchParams.set('edit', editToken)
+  return url.toString()
+}
 
 export function useTrip() {
   /**
@@ -24,28 +46,27 @@ export function useTrip() {
 
   /**
    * Build the shareable URL for a given trip ID.
-   * Replaces the `?trip=` param in the current URL without a page reload.
+   * Includes the edit token when this browser has editor access.
    */
-  function getShareUrl(tripId: string): string {
-    const url = new URL(window.location.href)
-    url.searchParams.set('trip', tripId)
-    return url.toString()
+  function getShareUrl(tripId: string, editToken?: string | null): string {
+    return buildTripUrl(tripId, editToken ?? resolveEditToken(tripId))
   }
 
   /**
    * Switch to a different trip by reloading the page with the new ID.
-   * Saves the new ID to localStorage so it persists after reload.
+   * Preserves per-trip edit tokens from localStorage when available.
    */
   function navigateToTrip(tripId: string): void {
     localStorage.setItem(STORAGE_KEY, tripId)
-    const url = new URL(window.location.href)
-    url.searchParams.set('trip', tripId)
-    window.location.href = url.toString()
+    window.location.href = buildTripUrl(tripId, resolveEditToken(tripId))
   }
 
   return {
     resolveTripId,
+    resolveEditToken,
     getShareUrl,
     navigateToTrip,
+    buildTripUrl,
+    persistEditToken,
   }
 }

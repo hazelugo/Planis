@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 import { ref, reactive, computed, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { computeSettlements } from '@/utils/settlements'
+import { persistEditToken } from '@/composables/useTrip'
+import { daysUntil, tripDurationDays } from '@/utils/dates'
 import type {
   TripState,
   TripEvent,
@@ -17,6 +19,10 @@ export const useTripStore = defineStore('trip', () => {
   // ── State ────────────────────────────────────────────────────────────────
   const tripId = ref<string>('')
   const syncStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const hasSynced = ref(false)
+  const loadStatus = ref<'loading' | 'ready' | 'error'>('loading')
+  const loadError = ref<string | null>(null)
+  const sessionEditToken = ref<string | null>(null)
 
   const state = reactive<TripState>({
     trip: { destination: '', startDate: '', endDate: '' },
@@ -31,7 +37,7 @@ export const useTripStore = defineStore('trip', () => {
 
   // ── Computed ─────────────────────────────────────────────────────────────
   const totalParticipants = computed(
-    () => state.attendance.adults + state.attendance.kids
+    () => state.friends.length || state.attendance.adults + state.attendance.kids
   )
 
   const totalEventCost = computed(() =>
@@ -53,23 +59,29 @@ export const useTripStore = defineStore('trip', () => {
       : 0
   )
 
-  const daysUntilTrip = computed(() => {
-    if (!state.trip.startDate) return null
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const start = new Date(state.trip.startDate + 'T00:00:00')
-    return Math.ceil((start.getTime() - today.getTime()) / 86400000)
-  })
+  const daysUntilTrip = computed(() =>
+    state.trip.startDate ? daysUntil(state.trip.startDate) : null
+  )
 
-  const tripDuration = computed(() => {
-    if (!state.trip.startDate || !state.trip.endDate) return 0
-    const s = new Date(state.trip.startDate + 'T00:00:00')
-    const e = new Date(state.trip.endDate + 'T00:00:00')
-    return Math.max(0, Math.ceil((e.getTime() - s.getTime()) / 86400000))
-  })
+  const tripDuration = computed(() =>
+    tripDurationDays(state.trip.startDate, state.trip.endDate)
+  )
 
   const settlements = computed<Settlement[]>(() =>
     computeSettlements(state.friends, state.payments, state.settledPairs)
+  )
+
+  const canEdit = computed(() => {
+    if (loadStatus.value !== 'ready') return false
+    if (!state.editToken) return true
+    return sessionEditToken.value === state.editToken
+  })
+
+  const isReadOnly = computed(() => loadStatus.value === 'ready' && !canEdit.value)
+
+  /** Legacy trip with no editToken — anyone with the link can still edit. */
+  const needsProtection = computed(
+    () => loadStatus.value === 'ready' && canEdit.value && !state.editToken
   )
 
   // ── Supabase persistence ──────────────────────────────────────────────────
@@ -77,7 +89,7 @@ export const useTripStore = defineStore('trip', () => {
   let remoteUpdate = false
 
   async function saveTrip(): Promise<void> {
-    if (!tripId.value) return
+    if (!tripId.value || !canEdit.value) return
     try {
       syncStatus.value = 'saving'
       const { error } = await supabase.from('trips').upsert({
@@ -86,6 +98,7 @@ export const useTripStore = defineStore('trip', () => {
         updated_at: new Date().toISOString(),
       })
       if (error) throw error
+      hasSynced.value = true
       syncStatus.value = 'saved'
       setTimeout(() => {
         if (syncStatus.value === 'saved') syncStatus.value = 'idle'
@@ -97,6 +110,7 @@ export const useTripStore = defineStore('trip', () => {
 
   function debouncedSave(): void {
     if (remoteUpdate) return
+    if (!canEdit.value) return
     syncStatus.value = 'saving'
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = setTimeout(saveTrip, 1400)
@@ -205,47 +219,35 @@ export const useTripStore = defineStore('trip', () => {
   }
 
   // ── Initialization ────────────────────────────────────────────────────────
-  // Called once from App.vue onMounted. Safe to await before mounting children.
-  async function initialize(id: string): Promise<void> {
-    tripId.value = id
+  let syncWatchStarted = false
 
-    // Sync URL so copying the address bar always shares the right trip
-    const shareUrl = new URL(window.location.href)
-    shareUrl.searchParams.set('trip', id)
-    window.history.replaceState({}, '', shareUrl)
+  function syncTripUrl(id: string): void {
+    const url = new URL(window.location.href)
+    url.searchParams.set('trip', id)
+    window.history.replaceState({}, '', url)
+  }
 
-    // Pre-populate bannerUrl from cache so header renders at correct height
-    // immediately, before the Supabase round-trip completes (fixes CLS).
-    restoreBannerCache(id)
-
-    try {
-      const { data } = await supabase
-        .from('trips')
-        .select('data')
-        .eq('id', id)
-        .single()
-      if (data?.data) {
-        Object.assign(state, data.data as TripState)
-        updateBannerCache(id)
-      }
-    } catch {
-      // First visit — state stays at defaults
+  function ensureEditTokenInUrl(token: string): void {
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('edit') !== token) {
+      url.searchParams.set('edit', token)
+      window.history.replaceState({}, '', url)
     }
+  }
 
-    loadTripIndex()
-    upsertTripIndex(
-      id,
-      state.trip.destination,
-      state.trip.startDate,
-      state.trip.endDate
-    )
+  function mintEditToken(): string {
+    const token = crypto.randomUUID()
+    state.editToken = token
+    return token
+  }
 
+  function startSyncWatchers(id: string): void {
     subscribeToRealTime()
+    if (syncWatchStarted) return
+    syncWatchStarted = true
 
-    // Start watching for local changes AFTER initial load to avoid a spurious save
     watch(state, debouncedSave, { deep: true })
 
-    // Keep trip index fresh as user edits destination / dates
     watch(
       () => [state.trip.destination, state.trip.startDate, state.trip.endDate] as const,
       ([dest, start, end]) => {
@@ -253,10 +255,8 @@ export const useTripStore = defineStore('trip', () => {
       }
     )
 
-    // Keep banner cache in sync so the header height is correct on next visit
     watch(() => state.trip.bannerUrl, () => updateBannerCache(id))
 
-    // Keep document title in sync with destination
     watch(
       () => state.trip.destination,
       (dest) => {
@@ -266,22 +266,116 @@ export const useTripStore = defineStore('trip', () => {
     )
   }
 
+  function finishInitialize(id: string): void {
+    loadTripIndex()
+    upsertTripIndex(
+      id,
+      state.trip.destination,
+      state.trip.startDate,
+      state.trip.endDate
+    )
+    startSyncWatchers(id)
+  }
+
+  // Called once from App.vue onMounted. Safe to await before mounting children.
+  async function initialize(id: string, editTokenFromSession: string | null): Promise<void> {
+    tripId.value = id
+    sessionEditToken.value = editTokenFromSession
+    loadStatus.value = 'loading'
+    loadError.value = null
+
+    syncTripUrl(id)
+    restoreBannerCache(id)
+
+    const { data, error } = await supabase
+      .from('trips')
+      .select('data')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (error) {
+      loadStatus.value = 'error'
+      loadError.value = 'Could not load this trip. Check your connection and try again.'
+      syncStatus.value = 'error'
+      return
+    }
+
+    if (!data) {
+      const token = mintEditToken()
+      sessionEditToken.value = token
+      persistEditToken(id, token)
+      ensureEditTokenInUrl(token)
+      loadStatus.value = 'ready'
+      finishInitialize(id)
+      return
+    }
+
+    Object.assign(state, data.data as TripState)
+    updateBannerCache(id)
+    hasSynced.value = true
+
+    if (state.editToken) {
+      if (sessionEditToken.value === state.editToken) {
+        ensureEditTokenInUrl(state.editToken)
+      }
+    }
+
+    loadStatus.value = 'ready'
+    finishInitialize(id)
+  }
+
+  async function retryLoad(editTokenFromSession: string | null): Promise<void> {
+    await initialize(tripId.value, editTokenFromSession)
+  }
+
+  /** Mint an editToken on a legacy trip and persist it. Only works while the trip is still open-edit. */
+  function protectTrip(): void {
+    if (!canEdit.value || state.editToken) return
+    const token = mintEditToken()
+    sessionEditToken.value = token
+    persistEditToken(tripId.value, token)
+    ensureEditTokenInUrl(token)
+    void saveTrip()
+  }
+
+  /** Replace current trip data with another trip's saved data (keeps this trip's ID and edit token). */
+  async function importTripData(fromTripId: string): Promise<'ok' | 'not-found' | 'error'> {
+    if (!canEdit.value || fromTripId === tripId.value) return 'error'
+    const preservedEditToken = state.editToken
+    const { data, error } = await supabase
+      .from('trips')
+      .select('data')
+      .eq('id', fromTripId)
+      .maybeSingle()
+    if (error) return 'error'
+    if (!data?.data) return 'not-found'
+    Object.assign(state, data.data as TripState)
+    state.editToken = preservedEditToken
+    updateBannerCache(tripId.value)
+    void saveTrip()
+    return 'ok'
+  }
+
   // ── CRUD: Events ──────────────────────────────────────────────────────────
   function addEvent(event: Omit<TripEvent, 'id'>): void {
+    if (!canEdit.value) return
     state.events.push({ ...event, id: genId() })
   }
 
   function updateEvent(id: string, patch: Partial<TripEvent>): void {
+    if (!canEdit.value) return
     const idx = state.events.findIndex(e => e.id === id)
     if (idx !== -1) Object.assign(state.events[idx], patch)
   }
 
   function removeEvent(id: string): void {
+    if (!canEdit.value) return
     const idx = state.events.findIndex(e => e.id === id)
     if (idx !== -1) state.events.splice(idx, 1)
   }
 
   function reorderEvents(fromIndex: number, toIndex: number): void {
+    if (!canEdit.value) return
     if (fromIndex === toIndex) return
     const [item] = state.events.splice(fromIndex, 1)
     state.events.splice(toIndex, 0, item)
@@ -289,12 +383,14 @@ export const useTripStore = defineStore('trip', () => {
 
   // ── CRUD: Friends ─────────────────────────────────────────────────────────
   function addFriend(name: string): void {
+    if (!canEdit.value) return
     const trimmed = name.trim()
     if (!trimmed) return
     state.friends.push({ id: genId(), name: trimmed })
   }
 
   function removeFriend(id: string): void {
+    if (!canEdit.value) return
     const idx = state.friends.findIndex(f => f.id === id)
     if (idx !== -1) state.friends.splice(idx, 1)
 
@@ -311,24 +407,33 @@ export const useTripStore = defineStore('trip', () => {
         state.payments.splice(i, 1)
       }
     }
+
+    state.settledPairs = state.settledPairs.filter(key => {
+      const [from, to] = key.split('→')
+      return from !== id && to !== id
+    })
   }
 
   // ── CRUD: Payments ────────────────────────────────────────────────────────
   function addPayment(p: Omit<Payment, 'id' | 'settled'>): void {
+    if (!canEdit.value) return
     state.payments.push({ ...p, id: genId(), settled: false })
   }
 
   function updatePayment(id: string, patch: Partial<Payment>): void {
+    if (!canEdit.value) return
     const idx = state.payments.findIndex(p => p.id === id)
     if (idx !== -1) Object.assign(state.payments[idx], patch)
   }
 
   function removePayment(id: string): void {
+    if (!canEdit.value) return
     const idx = state.payments.findIndex(p => p.id === id)
     if (idx !== -1) state.payments.splice(idx, 1)
   }
 
   function toggleSettled(fromId: string, toId: string): void {
+    if (!canEdit.value) return
     const key = `${fromId}→${toId}`
     const idx = state.settledPairs.indexOf(key)
     if (idx === -1) state.settledPairs.push(key)
@@ -336,10 +441,12 @@ export const useTripStore = defineStore('trip', () => {
   }
 
   function clearSettledPairs(): void {
+    if (!canEdit.value) return
     state.settledPairs.splice(0)
   }
 
   function unsettleAll(): void {
+    if (!canEdit.value) return
     state.settledPairs.splice(0)
     state.payments.forEach(p => { p.settled = false })
   }
@@ -348,6 +455,12 @@ export const useTripStore = defineStore('trip', () => {
     // State
     tripId,
     syncStatus,
+    hasSynced,
+    loadStatus,
+    loadError,
+    canEdit,
+    isReadOnly,
+    needsProtection,
     state,
     tripIndex,
     // Computed
@@ -360,6 +473,9 @@ export const useTripStore = defineStore('trip', () => {
     settlements,
     // Lifecycle
     initialize,
+    retryLoad,
+    protectTrip,
+    importTripData,
     saveTrip,
     subscribeToRealTime,
     unsubscribeFromRealTime,
