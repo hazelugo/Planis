@@ -271,6 +271,10 @@ async function removePayment(id: string) {
         <svg width="48" height="48" class="block mx-auto mb-3 text-emerald-500 dark:text-emerald-400" aria-hidden="true"><use href="/icons.svg#i-empty-settled"/></svg>
         <p class="text-base font-bold text-emerald-700 dark:text-emerald-400">All settled up!</p>
         <p class="text-sm text-emerald-600 dark:text-emerald-500 mt-1">Everyone's square — time to enjoy the trip.</p>
+        <button v-if="trip.state.settledPairs.length" @click="trip.clearSettledPairs()"
+          class="mt-4 px-4 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-800/30 transition-colors">
+          Reopen balances
+        </button>
       </div>
       <div v-else class="space-y-3">
         <div v-for="tx in trip.settlements" :key="`${tx.from}-${tx.to}`"
