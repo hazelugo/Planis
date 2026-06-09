@@ -68,12 +68,12 @@ onUnmounted(() => {
     </button>
   </div>
 
-  <div v-else class="flex h-screen overflow-hidden bg-slate-50 dark:bg-[#0f1117]">
+  <div v-else class="flex min-h-dvh lg:h-dvh lg:overflow-hidden bg-slate-50 dark:bg-[#0f1117]">
     <!-- Sidebar (desktop) -->
     <AppSidebar :current-tab="currentTab" @tab="currentTab = $event" />
 
     <!-- Main area -->
-    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <div class="flex-1 flex flex-col min-w-0 lg:min-h-0 lg:overflow-hidden">
       <AppHeader :current-tab="currentTab" :sync-status="trip.syncStatus" />
 
       <div v-if="trip.isReadOnly" class="shrink-0 px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800/30 text-center text-xs text-amber-800 dark:text-amber-300">
@@ -88,7 +88,10 @@ onUnmounted(() => {
       </div>
 
       <!-- Content -->
-      <main class="flex-1 overflow-y-auto px-4 pt-5 pb-28 lg:p-8" :inert="trip.isReadOnly">
+      <main
+        class="flex-1 px-4 pt-5 pb-28 lg:overflow-y-auto lg:min-h-0 lg:p-8"
+        :class="{ 'read-only-trip': trip.isReadOnly }"
+      >
         <div class="max-w-5xl mx-auto">
           <Transition name="fade" mode="out-in">
             <component :is="TABS[currentTab]" :key="currentTab" />

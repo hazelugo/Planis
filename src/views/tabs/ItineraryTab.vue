@@ -49,104 +49,24 @@ function clearFilters() {
   costMax.value = ''
 }
 
-// ── View mode + reorder ───────────────────────────────────────────────────
-// Flat view: array order = display order, drag + arrows work.
-// Group by day: sorted by time within each day — arrows swap times (or array order if untimed).
-const groupByDay = ref(true)
-
-const draggedId = ref<string | null>(null)
-const dragOverId = ref<string | null>(null)
-
-function onDragStart(e: DragEvent, id: string) {
-  if (groupByDay.value) return
-  draggedId.value = id
-  if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id) }
-}
-function onDragOver(e: DragEvent, id: string) {
-  if (groupByDay.value) return
-  e.preventDefault()
-  if (id !== draggedId.value) dragOverId.value = id
-}
-function onDragLeave(id: string) { if (dragOverId.value === id) dragOverId.value = null }
-function onDrop(e: DragEvent, targetId: string) {
-  if (groupByDay.value) return
-  e.preventDefault()
-  if (!draggedId.value || draggedId.value === targetId) { draggedId.value = null; dragOverId.value = null; return }
-  const from = trip.state.events.findIndex(ev => ev.id === draggedId.value)
-  const to = trip.state.events.findIndex(ev => ev.id === targetId)
-  if (from !== -1 && to !== -1) trip.reorderEvents(from, to)
-  draggedId.value = null; dragOverId.value = null
-}
-function onDragEnd() { draggedId.value = null; dragOverId.value = null }
-
-function moveEventFlat(id: string, delta: -1 | 1) {
-  const list = flatEvents.value
-  const idx = list.findIndex(e => e.id === id)
-  const targetIdx = idx + delta
-  if (idx < 0 || targetIdx < 0 || targetIdx >= list.length) return
-  const from = trip.state.events.findIndex(e => e.id === id)
-  const to = trip.state.events.findIndex(e => e.id === list[targetIdx].id)
-  if (from !== -1 && to !== -1) trip.reorderEvents(from, to)
-}
-
-function canMoveEventFlat(id: string, delta: -1 | 1) {
-  const idx = flatEvents.value.findIndex(e => e.id === id)
-  if (idx < 0) return false
-  const targetIdx = idx + delta
-  return targetIdx >= 0 && targetIdx < flatEvents.value.length
-}
-
+// ── Sorted + filtered + grouped ───────────────────────────────────────────
 function dayGroupKey(date: string) {
   return date || '__none__'
 }
 
-function dayGroupForEvent(id: string) {
-  const ev = trip.state.events.find(e => e.id === id)
-  if (!ev) return null
-  return groupedEvents.value.find(g => dayGroupKey(g.date) === dayGroupKey(ev.date)) ?? null
-}
-
-function canMoveEventInDay(id: string, delta: -1 | 1) {
-  const group = dayGroupForEvent(id)
-  if (!group || group.events.length < 2) return false
-  const idx = group.events.findIndex(e => e.id === id)
-  if (idx < 0) return false
-  const targetIdx = idx + delta
-  return targetIdx >= 0 && targetIdx < group.events.length
-}
-
-function moveEventInDay(id: string, delta: -1 | 1) {
-  const group = dayGroupForEvent(id)
-  if (!group) return
-  const idx = group.events.findIndex(e => e.id === id)
-  const targetIdx = idx + delta
-  if (idx < 0 || targetIdx < 0 || targetIdx >= group.events.length) return
-
-  const current = group.events[idx]
-  const other = group.events[targetIdx]
-
-  // When both events have times, swap times so chronological display updates.
-  if (current.time && other.time) {
-    const t = current.time
-    trip.updateEvent(current.id, { time: other.time })
-    trip.updateEvent(other.id, { time: t })
-    return
+function compareByTime(a: TripEvent, b: TripEvent) {
+  const aHasTime = !!a.time
+  const bHasTime = !!b.time
+  if (aHasTime && !bHasTime) return -1
+  if (!aHasTime && bHasTime) return 1
+  if (aHasTime && bHasTime) {
+    const tc = a.time.localeCompare(b.time)
+    if (tc !== 0) return tc
   }
-
-  const from = trip.state.events.findIndex(e => e.id === current.id)
-  const to = trip.state.events.findIndex(e => e.id === other.id)
-  if (from !== -1 && to !== -1) trip.reorderEvents(from, to)
+  return a.name.localeCompare(b.name)
 }
 
-// ── Sorted + filtered + grouped ───────────────────────────────────────────
 const totalParticipants = computed(() => trip.state.friends.length || trip.state.attendance.adults + trip.state.attendance.kids)
-
-/** Flat list — manual array order (used when groupByDay is off). */
-const flatEvents = computed(() => [...trip.state.events])
-
-function eventArrayIndex(id: string) {
-  return trip.state.events.findIndex(e => e.id === id)
-}
 
 function passesFilters(e: TripEvent) {
   const q = searchText.value.trim().toLowerCase()
@@ -158,8 +78,6 @@ function passesFilters(e: TripEvent) {
   if (max !== null && lineCost > max) return false
   return true
 }
-
-const filteredFlatEvents = computed(() => flatEvents.value.filter(passesFilters))
 
 const groupedEvents = computed(() => {
   const map = new Map<string, { label: string; date: string; events: TripEvent[]; total: number }>()
@@ -185,19 +103,11 @@ const groupedEvents = computed(() => {
     })
     .map(([, group]) => ({
       ...group,
-      events: [...group.events].sort((a, b) => {
-        const tc = (a.time || '').localeCompare(b.time || '')
-        if (tc !== 0) return tc
-        return eventArrayIndex(a.id) - eventArrayIndex(b.id)
-      }),
+      events: [...group.events].sort(compareByTime),
     }))
 })
 
-const matchCount = computed(() =>
-  groupByDay.value
-    ? groupedEvents.value.reduce((n, g) => n + g.events.length, 0)
-    : filteredFlatEvents.value.length
-)
+const matchCount = computed(() => groupedEvents.value.reduce((n, g) => n + g.events.length, 0))
 
 interface TripMapDay {
   key: string
@@ -546,32 +456,19 @@ async function openTripInMaps() {
           <span class="font-semibold text-teal-600 dark:text-teal-400">{{ matchCount }}</span> of {{ trip.state.events.length }} events
         </p>
 
-        <!-- View mode -->
-        <div class="flex items-center justify-between pt-1 border-t border-slate-50 dark:border-hairline">
-          <span class="text-xs text-slate-400">
-            {{ trip.state.events.length }} event{{ trip.state.events.length !== 1 ? 's' : '' }}
-            <span v-if="!groupByDay" class="ml-1 text-slate-300 hidden sm:inline">· drag to reorder</span>
-          </span>
-          <button type="button" @click="groupByDay = !groupByDay"
-            :class="['flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
-              groupByDay
-                ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
-                : 'border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset']">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            Group by day
-          </button>
-        </div>
+        <p v-if="trip.state.events.length" class="text-xs text-slate-400 pt-1 border-t border-slate-50 dark:border-hairline">
+          {{ trip.state.events.length }} event{{ trip.state.events.length !== 1 ? 's' : '' }}
+        </p>
       </div>
 
       <!-- No results -->
-      <div v-if="groupByDay ? !groupedEvents.length : !filteredFlatEvents.length" class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline p-12 text-center">
+      <div v-if="!groupedEvents.length" class="rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline p-12 text-center">
         <svg width="40" height="40" class="block mx-auto mb-3 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-search"/></svg>
         <p class="text-sm font-semibold text-slate-600 dark:text-slate-400">No events match your search</p>
         <button @click="clearFilters" class="mt-3 text-xs text-teal-600 dark:text-teal-400 font-semibold hover:underline">Clear filters</button>
       </div>
 
-      <!-- Grouped by day -->
-      <div v-else-if="groupByDay" class="space-y-8">
+      <div v-else class="space-y-8">
         <div v-for="group in groupedEvents" :key="group.date || '__none__'">
           <div class="flex items-baseline justify-between mb-4 pb-3 border-b border-slate-100 dark:border-hairline gap-2">
             <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 leading-none min-w-0">{{ group.label }}</h3>
@@ -654,9 +551,8 @@ async function openTripInMaps() {
                   </div>
                 </div>
 
-                <!-- Normal entry (reorder within day via ↑↓) -->
                 <div v-else :key="event.id"
-                  class="relative flex items-start gap-0 group select-none py-2 transition-all rounded-xl">
+                  class="relative flex items-start gap-0 group py-2 transition-all rounded-xl">
 
                   <!-- Category dot -->
                   <div class="relative flex flex-col items-center shrink-0 z-10 mr-4" style="width:32px">
@@ -688,18 +584,6 @@ async function openTripInMaps() {
                         <p v-if="event.perPerson && totalParticipants > 1" class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${{ fmt(event.cost) }} / person</p>
                       </div>
                       <div class="print:hidden flex flex-col gap-0.5 shrink-0">
-                        <button v-if="canMoveEventInDay(event.id, -1)" @click="moveEventInDay(event.id, -1)"
-                          aria-label="Move earlier in the day"
-                          title="Move earlier in the day"
-                          class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
-                        </button>
-                        <button v-if="canMoveEventInDay(event.id, 1)" @click="moveEventInDay(event.id, 1)"
-                          aria-label="Move later in the day"
-                          title="Move later in the day"
-                          class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-                        </button>
                         <a v-if="eventMapsUrl(event)" :href="eventMapsUrl(event)!"
                           target="_blank" rel="noopener"
                           aria-label="View on Google Maps"
@@ -725,154 +609,6 @@ async function openTripInMaps() {
               </template>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Flat timeline — manual order, drag to reorder -->
-      <div v-else class="relative">
-        <div class="absolute left-5 top-0 bottom-0 w-px bg-slate-200 dark:bg-[#2a3347]"></div>
-        <div class="space-y-1">
-          <template v-for="event in filteredFlatEvents" :key="event.id">
-
-            <div v-if="editingId === event.id"
-              class="relative z-20 ml-10 bg-surface rounded-2xl border-2 border-teal-300 dark:border-teal-700 shadow-md p-5 mb-2">
-              <p class="eyebrow text-teal-600 dark:text-teal-400 mb-4">Editing Event</p>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="sm:col-span-2">
-                  <label class="eyebrow block mb-1.5">Event Name</label>
-                  <input v-model="editForm.name" type="text" :class="inputCls" />
-                </div>
-                <div>
-                  <label class="eyebrow block mb-1.5">Date</label>
-                  <input v-model="editForm.date" type="date" :class="inputCls" />
-                </div>
-                <div>
-                  <label class="eyebrow block mb-1.5">Time</label>
-                  <input v-model="editForm.time" type="time" :class="inputCls" />
-                </div>
-                <div>
-                  <label class="eyebrow block mb-1.5">Category</label>
-                  <select v-model="editForm.category" :class="inputCls">
-                    <option>Transport</option><option>Lodging</option><option>Food</option><option>Adventure</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="eyebrow block mb-1.5">Cost Type</label>
-                  <div class="flex gap-1.5 h-[42px]">
-                    <button @click="editForm.perPerson = false" :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', !editForm.perPerson ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-200 dark:border-hairline text-slate-500']">Flat Rate</button>
-                    <button @click="editForm.perPerson = true" :class="['flex-1 rounded-xl text-xs font-semibold border transition-all', editForm.perPerson ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-200 dark:border-hairline text-slate-500']">Per Person</button>
-                  </div>
-                </div>
-                <div>
-                  <label class="eyebrow block mb-1.5">Cost ($)</label>
-                  <div class="relative">
-                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
-                    <input v-model.number="editForm.cost" type="number" min="0" step="0.01" :class="inputCls + ' pl-7'" />
-                  </div>
-                </div>
-                <div class="sm:col-span-2">
-                  <label class="eyebrow block mb-1.5">Location <span class="normal-case font-normal text-slate-300">(optional)</span></label>
-                  <div class="relative">
-                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <input v-model="editForm.location" type="text" placeholder="Address or place name for Maps" maxlength="200" :class="inputCls + ' pl-8'" />
-                  </div>
-                </div>
-                <div class="sm:col-span-2">
-                  <label class="eyebrow block mb-1.5">Notes</label>
-                  <textarea v-model="editForm.notes" rows="2" class="w-full px-3 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
-                </div>
-                <div class="sm:col-span-2">
-                  <label class="eyebrow block mb-1.5">Link <span class="normal-case font-normal text-slate-300">(optional)</span></label>
-                  <div class="relative">
-                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 pointer-events-none" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                    <input v-model="editForm.url" type="url" placeholder="https://…" :class="inputCls + ' pl-8'" />
-                  </div>
-                </div>
-              </div>
-              <div class="flex gap-2 mt-4">
-                <button @click="saveEdit" :disabled="!editForm.name.trim()" class="px-5 py-2 bg-teal-600 text-white text-sm font-semibold rounded-xl hover:bg-teal-700 disabled:opacity-40 transition-colors shadow-sm">Save Changes</button>
-                <button @click="cancelEdit" class="px-5 py-2 bg-slate-100 dark:bg-lift text-slate-600 dark:text-slate-300 text-sm font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-[#2a3347] transition-colors">Cancel</button>
-              </div>
-            </div>
-
-            <div v-else
-              :draggable="trip.canEdit"
-              @dragstart="onDragStart($event, event.id)"
-              @dragover.prevent="onDragOver($event, event.id)"
-              @dragleave="onDragLeave(event.id)"
-              @drop.prevent="onDrop($event, event.id)"
-              @dragend="onDragEnd"
-              :class="['relative flex items-start gap-0 group select-none py-2 transition-all rounded-xl',
-                draggedId === event.id ? 'opacity-40' : 'opacity-100',
-                dragOverId === event.id ? 'bg-teal-50/60 dark:bg-teal-900/10' : '']">
-
-              <div v-if="trip.canEdit" class="hidden sm:flex print:hidden items-center justify-center w-4 shrink-0 pt-3 cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 transition-colors z-10" aria-hidden="true">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
-                  <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-                  <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
-                </svg>
-              </div>
-
-              <div class="relative flex flex-col items-center shrink-0 z-10 mr-4" style="width:32px">
-                <div :class="['w-8 h-8 rounded-full border-2 border-white dark:border-[#0f1117] shadow-sm flex items-center justify-center mt-2 shrink-0', CAT_COLORS[event.category]?.dot]">
-                  <svg width="18" height="18" aria-hidden="true"><use :href="`/icons.svg#${CAT_ICONS[event.category]}`"/></svg>
-                </div>
-              </div>
-
-              <div class="flex-1 min-w-0 bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm px-4 py-3.5 hover:border-slate-200 hover:shadow-md transition-all mb-1">
-                <div class="flex items-start gap-2">
-                  <div class="flex-1 min-w-0">
-                    <a v-if="event.url" :href="event.url" target="_blank" rel="noopener"
-                      class="font-semibold text-slate-800 dark:text-slate-100 text-base leading-snug block hover:text-teal-600 hover:underline transition-colors">{{ event.name }}</a>
-                    <p v-else class="font-semibold text-slate-800 dark:text-slate-100 text-base leading-snug">{{ event.name }}</p>
-                    <div class="flex items-center gap-2 mt-1.5 flex-wrap">
-                      <span v-if="event.date" class="text-xs text-slate-400">{{ fmtDate(event.date) }}</span>
-                      <span v-if="event.time" class="text-xs text-slate-400">{{ event.time }}</span>
-                      <span :class="['text-[11px] px-2 py-0.5 rounded-full font-semibold', CAT_COLORS[event.category]?.badge]">{{ event.category }}</span>
-                      <span v-if="event.perPerson" class="text-[11px] bg-slate-100 dark:bg-inset text-slate-500 px-2 py-0.5 rounded-full">Per person</span>
-                    </div>
-                    <p v-if="(event.location ?? '').trim()" class="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5 leading-snug line-clamp-2">
-                      <a v-if="eventMapsUrl(event)" :href="eventMapsUrl(event)!" target="_blank" rel="noopener" class="hover:underline">{{ (event.location ?? '').trim() }}</a>
-                      <span v-else>{{ (event.location ?? '').trim() }}</span>
-                    </p>
-                    <p v-if="event.notes" class="text-xs text-slate-400 mt-2 leading-relaxed pl-3 border-l-2 border-slate-100 dark:border-hairline line-clamp-2">{{ event.notes }}</p>
-                  </div>
-                  <div class="text-right shrink-0 ml-2">
-                    <p class="font-bold text-slate-700 dark:text-slate-300 text-sm">${{ fmt(event.perPerson ? event.cost * totalParticipants : event.cost) }}</p>
-                    <p v-if="event.perPerson && totalParticipants > 1" class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${{ fmt(event.cost) }} / person</p>
-                  </div>
-                  <div class="print:hidden flex flex-col gap-0.5 shrink-0">
-                    <button v-if="canMoveEventFlat(event.id, -1)" @click="moveEventFlat(event.id, -1)"
-                      aria-label="Move event up" title="Move up"
-                      class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
-                    </button>
-                    <button v-if="canMoveEventFlat(event.id, 1)" @click="moveEventFlat(event.id, 1)"
-                      aria-label="Move event down" title="Move down"
-                      class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-                    </button>
-                    <a v-if="eventMapsUrl(event)" :href="eventMapsUrl(event)!"
-                      target="_blank" rel="noopener" aria-label="View on Google Maps"
-                      title="Open location in Google Maps"
-                      class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all lg:opacity-0 lg:group-hover:opacity-100 transition-all">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    </a>
-                    <button @click="startEdit(event)" aria-label="Edit event"
-                      class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all lg:opacity-0 lg:group-hover:opacity-100 transition-all">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    </button>
-                    <button @click="removeEvent(event.id)" aria-label="Delete event"
-                      class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all lg:opacity-0 lg:group-hover:opacity-100 transition-all">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </template>
         </div>
       </div>
     </div>
