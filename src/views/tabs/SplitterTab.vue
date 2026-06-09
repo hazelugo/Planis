@@ -353,6 +353,14 @@ async function removePayment(id: string) {
             <span :class="['text-base font-bold tabular-nums', payment.settled ? 'text-slate-400' : 'text-slate-800 dark:text-slate-200']">
               ${{ fmt(payment.amount) }}
             </span>
+            <label class="flex items-center gap-1 cursor-pointer select-none" :title="payment.settled ? 'Mark unsettled' : 'Mark settled'">
+              <input type="checkbox" :checked="payment.settled"
+                @change="trip.updatePayment(payment.id, { settled: !payment.settled })"
+                class="w-3.5 h-3.5 rounded text-emerald-500 border-slate-300 focus:ring-emerald-400 cursor-pointer" />
+              <span :class="['text-xs font-semibold', payment.settled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400']">
+                {{ payment.settled ? 'Settled' : 'Settle' }}
+              </span>
+            </label>
             <button @click="editPayment(payment)" aria-label="Edit expense" class="lg:opacity-0 lg:group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
