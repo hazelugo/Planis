@@ -2,6 +2,7 @@
 import { ref, reactive, computed, nextTick } from 'vue'
 import { useTripStore } from '@/stores/trips'
 import { useUIStore } from '@/stores/ui'
+import { computeMemberPaymentStats } from '@/utils/settlements'
 import type { Payment } from '@/types/domain'
 
 const trip = useTripStore()
@@ -27,6 +28,12 @@ const friendName = (id: string) => trip.state.friends.find(f => f.id === id)?.na
 const friendInitial = (name: string) => name.trim().charAt(0).toUpperCase()
 const isSettled = (from: string, to: string) => trip.state.settledPairs.includes(`${from}→${to}`)
 const totalPayments = computed(() => trip.state.payments.reduce((s, p) => s + p.amount, 0))
+const memberPaidStats = computed(() =>
+  computeMemberPaymentStats(trip.state.friends, trip.state.payments, trip.state.settledPairs)
+)
+function memberPaid(id: string) {
+  return memberPaidStats.value.get(id) ?? { amount: 0, percent: 0 }
+}
 const splitPercentageTotal = computed(() => {
   return Math.round(Object.values(newPayment.splitPercentages).reduce((s, v) => s + (v || 0), 0) * 100) / 100
 })
@@ -250,7 +257,20 @@ async function removePayment(id: string) {
             :style="`background:${avatarColor(f.id)}`">
             {{ friendInitial(f.name) }}
           </div>
-          <span class="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate w-full text-center">{{ f.name }}</span>
+          <span class="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate w-full text-center leading-tight">{{ f.name }}</span>
+          <div v-if="totalPayments > 0" class="w-full space-y-1.5">
+            <p class="text-[11px] font-bold text-teal-600 dark:text-teal-400 tabular-nums text-center leading-none">
+              ${{ fmt(memberPaid(f.id).amount) }}
+              <span class="text-slate-300 dark:text-slate-600 font-semibold mx-0.5">·</span>
+              {{ memberPaid(f.id).percent }}%
+            </p>
+            <div class="h-1 rounded-full bg-slate-200/80 dark:bg-slate-700 overflow-hidden" role="presentation">
+              <div
+                class="h-full rounded-full bg-teal-500 dark:bg-teal-400 transition-all duration-300"
+                :style="{ width: `${Math.min(100, memberPaid(f.id).percent)}%` }"
+              />
+            </div>
+          </div>
           <button @click="trip.removeFriend(f.id)"
             :aria-label="`Remove ${f.name}`"
             class="absolute -top-1 -right-1 w-10 h-10 rounded-full bg-surface text-slate-400 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 shadow-sm transition-all lg:opacity-0 lg:group-hover:opacity-100 flex items-center justify-center">
