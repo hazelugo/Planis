@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useTripStore } from '@/stores/trips'
-import { addDaysIso, daysBetween, localTodayIso } from '@/utils/dates'
+import { addDaysIso, daysUntil, localTodayIso } from '@/utils/dates'
 
 const trip = useTripStore()
 
 // ── Weather ──────────────────────────────────────────────────────────────
-interface WeatherDay { date: string; code: number; high: number; low: number; sunrise: string; sunset: string }
+interface WeatherDay { date: string; code: number | null; high: number | null; low: number | null; sunrise: string; sunset: string }
+/** Open-Meteo publishes daily highs/lows ~14 days ahead; day 15+ often returns null temps. */
+const TEMP_FORECAST_DAYS = 14
 const weather = ref<WeatherDay[]>([])
 const weatherLoading = ref(false)
 const weatherError = ref('')
@@ -17,7 +19,8 @@ const WMO: Record<number, string> = {
   61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',
   80:'Showers',81:'Rain showers',82:'Heavy showers',95:'Thunderstorm',96:'Thunderstorm',99:'Thunderstorm',
 }
-function weatherEmoji(code: number) {
+function weatherEmoji(code: number | null) {
+  if (code == null) return '🌡️'
   if (code <= 1) return '☀️'; if (code <= 3) return '⛅'; if (code <= 48) return '🌫️'
   if (code <= 67) return '🌧️'; if (code <= 77) return '❄️'; if (code <= 82) return '🌦️'; return '⛈️'
 }
@@ -31,6 +34,13 @@ function fmtTime(iso: string) {
 function fmtWeatherDate(d: string) {
   if (!d) return ''
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+function roundTemp(v: unknown): number | null {
+  if (v == null || typeof v !== 'number' || Number.isNaN(v)) return null
+  return Math.round(v)
+}
+function hasTemps(day: WeatherDay) {
+  return day.high != null && day.low != null
 }
 
 const weatherNote = ref('')
@@ -72,23 +82,23 @@ async function fetchWeather() {
     }
     const { lat, lon } = coords
     const today = localTodayIso()
-    const maxEnd = addDaysIso(today, 15)
+    const maxEnd = addDaysIso(today, 15) // API horizon (~16 days); last day may lack temps
     const tripStart = trip.state.trip.startDate && trip.state.trip.startDate >= today
       ? trip.state.trip.startDate : today
+    const daysOut = daysUntil(tripStart)
 
-    // Trip beyond 15-day forecast window — show a helpful message instead of misleading current conditions
-    if (tripStart > maxEnd) {
-      const daysAway = daysBetween(maxEnd, tripStart)
-      weatherNote.value = daysAway > 7
+    // Beyond reliable temperature forecast — avoid showing 0° from null API values
+    if (daysOut != null && daysOut > TEMP_FORECAST_DAYS) {
+      weatherNote.value = daysOut > TEMP_FORECAST_DAYS + 7
         ? 'Forecast not available yet — check back closer to departure.'
-        : `Forecast available in ~${daysAway} day${daysAway !== 1 ? 's' : ''}.`
+        : `Temperature forecast available in about ${daysOut - TEMP_FORECAST_DAYS} day${daysOut - TEMP_FORECAST_DAYS !== 1 ? 's' : ''}.`
       weather.value = []
       weatherLoading.value = false
       return
     }
 
-    const endRaw = trip.state.trip.endDate && trip.state.trip.endDate > tripStart
-      ? trip.state.trip.endDate : addDaysIso(today, 6)
+    const endRaw = trip.state.trip.endDate && trip.state.trip.endDate >= tripStart
+      ? trip.state.trip.endDate : tripStart
     const end = endRaw > maxEnd ? maxEnd : endRaw
 
     const wData = await fetch(
@@ -99,14 +109,26 @@ async function fetchWeather() {
     if (wData.error) {
       weatherError.value = wData.reason || 'Could not load weather'
     } else if (wData.daily) {
-      weather.value = wData.daily.time.map((date: string, i: number) => ({
+      const mapped: WeatherDay[] = wData.daily.time.map((date: string, i: number) => ({
         date,
-        code: (wData.daily.weather_code ?? wData.daily.weathercode)[i],
-        high: Math.round(wData.daily.temperature_2m_max[i]),
-        low: Math.round(wData.daily.temperature_2m_min[i]),
-        sunrise: wData.daily.sunrise[i],
-        sunset: wData.daily.sunset[i],
+        code: (wData.daily.weather_code ?? wData.daily.weathercode)?.[i] ?? null,
+        high: roundTemp(wData.daily.temperature_2m_max?.[i]),
+        low: roundTemp(wData.daily.temperature_2m_min?.[i]),
+        sunrise: wData.daily.sunrise?.[i] ?? '',
+        sunset: wData.daily.sunset?.[i] ?? '',
       }))
+      const withTemps = mapped.filter(hasTemps)
+      if (!withTemps.length) {
+        weather.value = []
+        weatherNote.value = daysOut != null && daysOut > 0
+          ? 'Forecast not available yet — temperatures publish about 2 weeks ahead.'
+          : 'Forecast not available yet — check back closer to departure.'
+      } else {
+        weather.value = withTemps
+        if (withTemps.length < mapped.length) {
+          weatherNote.value = 'Some trip days are beyond the forecast window — check back closer to departure.'
+        }
+      }
     }
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') return // request cancelled — don't update state
@@ -438,14 +460,15 @@ function fmtDate(d: string) {
         <svg class="shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         {{ weatherNote }}
       </div>
-      <div v-else-if="weather.length" class="overflow-x-auto -mx-2 px-2 pb-1">
+      <p v-if="weatherNote && weather.length" class="text-xs text-slate-400 mb-3 -mt-2">{{ weatherNote }}</p>
+      <div v-if="weather.length" class="overflow-x-auto -mx-2 px-2 pb-1">
         <div class="flex gap-2.5" style="min-width:max-content">
           <div v-for="day in weather" :key="day.date"
             class="flex flex-col items-center gap-1.5 px-3.5 py-3 bg-slate-50 dark:bg-inset rounded-2xl min-w-[76px]">
             <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{ fmtWeatherDate(day.date) }}</p>
             <span class="text-3xl leading-none">{{ weatherEmoji(day.code) }}</span>
-            <p class="text-[10px] text-slate-500 dark:text-slate-400 text-center leading-snug">{{ WMO[day.code] || 'Conditions vary' }}</p>
-            <div class="flex items-center gap-1.5 mt-0.5">
+            <p class="text-[10px] text-slate-500 dark:text-slate-400 text-center leading-snug">{{ day.code != null ? (WMO[day.code] || 'Conditions vary') : 'Conditions vary' }}</p>
+            <div v-if="hasTemps(day)" class="flex items-center gap-1.5 mt-0.5 tabular-nums">
               <span class="text-sm font-bold text-rose-500">{{ day.high }}°C</span>
               <span class="text-slate-300">/</span>
               <span class="text-xs text-blue-500 dark:text-blue-400">{{ day.low }}°C</span>
