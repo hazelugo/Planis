@@ -328,10 +328,14 @@ function fmtDate(d: string) {
         <!-- Cost hero -->
         <div>
           <p class="text-white/60 text-[10px] font-bold uppercase tracking-widest">Total Trip Cost</p>
-          <div class="flex items-end gap-3 mt-1.5">
+          <div class="flex flex-col sm:flex-row sm:items-end gap-2 mt-1.5">
             <p class="cost-hero-number text-white leading-none">${{ fmt(totalEventCost) }}</p>
-            <span v-if="perPerson > 0" class="mb-1.5 px-2.5 py-1 rounded-full bg-white/20 text-white text-xs font-bold whitespace-nowrap">
-              ${{ fmt(perPerson) }} / person
+            <span
+              v-if="perPerson > 0"
+              title="Cost per person"
+              class="inline-flex items-center self-start sm:mb-1.5 px-2.5 py-1 rounded-full bg-white/20 text-white text-xs font-bold leading-none shrink-0"
+            >
+              ${{ fmt(perPerson) }}&nbsp;pp
             </span>
           </div>
         </div>
