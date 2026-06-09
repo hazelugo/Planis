@@ -29,7 +29,7 @@ const friendInitial = (name: string) => name.trim().charAt(0).toUpperCase()
 const isSettled = (from: string, to: string) => trip.state.settledPairs.includes(`${from}→${to}`)
 const totalPayments = computed(() => trip.state.payments.reduce((s, p) => s + p.amount, 0))
 const memberPaidStats = computed(() =>
-  computeMemberPaymentStats(trip.state.friends, trip.state.payments, trip.state.settledPairs)
+  computeMemberPaymentStats(trip.state.friends, trip.state.payments)
 )
 function memberPaid(id: string) {
   return memberPaidStats.value.get(id) ?? { amount: 0, percent: 0 }
