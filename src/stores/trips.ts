@@ -339,6 +339,11 @@ export const useTripStore = defineStore('trip', () => {
     state.settledPairs.splice(0)
   }
 
+  function unsettleAll(): void {
+    state.settledPairs.splice(0)
+    state.payments.forEach(p => { p.settled = false })
+  }
+
   return {
     // State
     tripId,
@@ -372,6 +377,7 @@ export const useTripStore = defineStore('trip', () => {
     removePayment,
     toggleSettled,
     clearSettledPairs,
+    unsettleAll,
     // Trip index helpers
     loadTripIndex,
     upsertTripIndex,

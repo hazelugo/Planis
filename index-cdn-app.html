@@ -2270,7 +2270,7 @@ createApp({
       state.friends.forEach(f => { bal[f.id] = 0; });
 
       state.payments.forEach(p => {
-        if (!p.splitAmong.length) return;
+        if (!p.splitAmong.length || p.settled) return;
         bal[p.paidById] = (bal[p.paidById] || 0) + p.amount;
         p.splitAmong.forEach(id => {
           const pct = p.splitPercentages?.[id] ?? (100 / p.splitAmong.length);

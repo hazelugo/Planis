@@ -4,8 +4,8 @@ import type { Friend, Payment, Settlement } from '@/types/domain'
  * Minimize-transactions debt settlement algorithm.
  * Pure function — no side effects, safe to call in a computed.
  *
+ * Skips payments marked settled:true from the balance calculation.
  * Uses settledPairs string keys ("fromId→toId") to mark individual settlement transactions as paid.
- * payment.settled is display-only (dims the row) and does NOT affect balance calculation.
  */
 export function computeSettlements(
   friends: Friend[],
@@ -18,7 +18,7 @@ export function computeSettlements(
   friends.forEach(f => { bal[f.id] = 0 })
 
   payments.forEach(p => {
-    if (!p.splitAmong.length) return
+    if (!p.splitAmong.length || p.settled) return
     bal[p.paidById] = (bal[p.paidById] ?? 0) + p.amount
     p.splitAmong.forEach(id => {
       const pct = p.splitPercentages?.[id] ?? (100 / p.splitAmong.length)
