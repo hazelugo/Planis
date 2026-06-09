@@ -35,7 +35,7 @@ vercel --prod                  # deploy
 ## Key architecture
 
 - **State:** `src/stores/trips.ts` — trip JSON blob, Supabase sync, realtime, edit tokens
-- **Realtime:** Subscription stays active in background tabs (do not unsubscribe on `pagehide`). If sync still fails, confirm `trips` is in Supabase → Database → Publications → `supabase_realtime`.
+- **Realtime:** Same-browser tabs sync via `BroadcastChannel` (~250ms). Cross-device uses Supabase `postgres_changes` — run `supabase/realtime.sql` once if remote sync is needed.
 - **Edit access:** New trips get `?edit=<token>`. Legacy trips without a token remain open-edit until "Get private editor link" is clicked.
 - **Tabs:** Overview, Itinerary, Spending, Splitter (Photos shelved)
 - **Dates:** `src/utils/dates.ts` — always parse `YYYY-MM-DD` as local midnight

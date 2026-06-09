@@ -109,6 +109,7 @@ export const useTripStore = defineStore('trip', () => {
       const { error } = await supabase.from('trips').upsert(row)
       if (error) throw error
       hasSynced.value = true
+      broadcastLocalState()
       syncStatus.value = 'saved'
       setTimeout(() => {
         if (syncStatus.value === 'saved') syncStatus.value = 'idle'
@@ -169,17 +170,50 @@ export const useTripStore = defineStore('trip', () => {
     saveTripIndexToStorage()
   }
 
-  // ── Real-time subscription ────────────────────────────────────────────────
-  // Lives for the page lifetime (like the CDN app). Do NOT unsubscribe on
-  // pagehide — that fires when switching browser tabs and kills background sync.
+  // ── Cross-tab + Supabase realtime sync ───────────────────────────────────
+  // Same-browser tabs: BroadcastChannel (instant, no Supabase config needed).
+  // Cross-device / other browsers: Supabase postgres_changes on `trips`.
+  const tabInstanceId = crypto.randomUUID()
   let channel: ReturnType<typeof supabase.channel> | null = null
+  let broadcastChannel: BroadcastChannel | null = null
   let subscribedTripId: string | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let broadcastTimer: ReturnType<typeof setTimeout> | null = null
+
+  function parseTripData(raw: unknown): TripState | null {
+    if (!raw) return null
+    let parsed = raw
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed)
+      } catch {
+        return null
+      }
+    }
+    if (typeof parsed !== 'object' || parsed === null) return null
+    return parsed as TripState
+  }
+
+  /** Replace reactive state so Vue picks up array replacements (events, friends, etc.). */
+  function mergeRemoteState(incoming: TripState): void {
+    state.trip = { ...incoming.trip }
+    state.attendance = { ...incoming.attendance }
+    state.budget = incoming.budget ?? 0
+    state.events = [...(incoming.events ?? [])]
+    state.friends = [...(incoming.friends ?? [])]
+    state.payments = [...(incoming.payments ?? [])]
+    state.settledPairs = [...(incoming.settledPairs ?? [])]
+    state.photos = [...(incoming.photos ?? [])]
+    if (incoming.editToken !== undefined) state.editToken = incoming.editToken
+    else delete state.editToken
+  }
 
   function applyRemoteTripData(row: Record<string, unknown>): void {
-    if (!row.data) return
+    const incoming = parseTripData(row.data)
+    if (!incoming) return
+
     remoteUpdate = true
-    Object.assign(state, row.data as TripState)
+    mergeRemoteState(incoming)
     hasSynced.value = true
     syncStatus.value = 'saved'
     setTimeout(() => {
@@ -188,42 +222,84 @@ export const useTripStore = defineStore('trip', () => {
     }, 0)
   }
 
-  const realtimeFilter = () =>
-    ({
-      schema: 'public',
-      table: 'trips',
-      filter: `id=eq.${tripId.value}`,
-    }) as const
+  function broadcastLocalState(): void {
+    if (!broadcastChannel || remoteUpdate) return
+    broadcastChannel.postMessage({
+      source: tabInstanceId,
+      type: 'state',
+      payload: JSON.parse(JSON.stringify(state)) as TripState,
+    })
+  }
+
+  function debouncedBroadcast(): void {
+    if (remoteUpdate || loadStatus.value !== 'ready') return
+    if (broadcastTimer) clearTimeout(broadcastTimer)
+    broadcastTimer = setTimeout(() => {
+      broadcastTimer = null
+      broadcastLocalState()
+    }, 250)
+  }
+
+  let broadcastTripId: string | null = null
+
+  function setupBroadcastSync(id: string): void {
+    if (typeof BroadcastChannel === 'undefined') return
+    if (broadcastChannel && broadcastTripId === id) return
+    teardownBroadcastSync()
+    broadcastTripId = id
+    broadcastChannel = new BroadcastChannel(`planis:trip:${id}`)
+    broadcastChannel.onmessage = (event: MessageEvent) => {
+      const msg = event.data as { source?: string; type?: string; payload?: TripState }
+      if (!msg || msg.source === tabInstanceId || msg.type !== 'state' || !msg.payload) return
+      remoteUpdate = true
+      mergeRemoteState(msg.payload)
+      hasSynced.value = true
+      syncStatus.value = 'saved'
+      setTimeout(() => {
+        remoteUpdate = false
+        if (syncStatus.value === 'saved') syncStatus.value = 'idle'
+      }, 0)
+    }
+  }
+
+  function teardownBroadcastSync(): void {
+    if (broadcastTimer) {
+      clearTimeout(broadcastTimer)
+      broadcastTimer = null
+    }
+    if (broadcastChannel) {
+      broadcastChannel.close()
+      broadcastChannel = null
+    }
+    broadcastTripId = null
+  }
 
   function subscribeToRealTime(): void {
     if (!tripId.value) return
     if (channel && subscribedTripId === tripId.value) return
 
-    unsubscribeFromRealTime()
-
     const id = tripId.value
+    setupBroadcastSync(id)
+    teardownRealtimeOnly()
     subscribedTripId = id
 
+    // No server-side filter — filter by trip id client-side so sync works even
+    // when REPLICA IDENTITY / publication filters are misconfigured.
     channel = supabase
       .channel(`trip:${id}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', ...realtimeFilter() },
+        { event: '*', schema: 'public', table: 'trips' },
         (payload) => {
-          if (payload.new) applyRemoteTripData(payload.new as Record<string, unknown>)
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', ...realtimeFilter() },
-        (payload) => {
+          const row = (payload.new ?? payload.old) as Record<string, unknown> | undefined
+          if (!row || row.id !== id) return
           if (payload.new) applyRemoteTripData(payload.new as Record<string, unknown>)
         }
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') return
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          unsubscribeFromRealTime()
+          teardownRealtimeOnly()
           if (reconnectTimer) clearTimeout(reconnectTimer)
           reconnectTimer = setTimeout(() => {
             reconnectTimer = null
@@ -233,13 +309,14 @@ export const useTripStore = defineStore('trip', () => {
       })
   }
 
-  /** Reconnect if the websocket dropped while the tab was in the background. */
+  /** Reconnect Supabase channel if the websocket dropped in the background. */
   function ensureRealtimeSubscription(): void {
     if (loadStatus.value !== 'ready' || !tripId.value) return
+    if (!broadcastChannel) setupBroadcastSync(tripId.value)
     if (!channel || subscribedTripId !== tripId.value) subscribeToRealTime()
   }
 
-  function unsubscribeFromRealTime(): void {
+  function teardownRealtimeOnly(): void {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
@@ -249,6 +326,11 @@ export const useTripStore = defineStore('trip', () => {
       channel = null
     }
     subscribedTripId = null
+  }
+
+  function unsubscribeFromRealTime(): void {
+    teardownRealtimeOnly()
+    teardownBroadcastSync()
   }
 
   // ── Banner URL cache (localStorage) ─────────────────────────────────────
@@ -298,6 +380,7 @@ export const useTripStore = defineStore('trip', () => {
     if (syncWatchStarted) return
     syncWatchStarted = true
 
+    watch(state, debouncedBroadcast, { deep: true })
     watch(state, debouncedSave, { deep: true })
 
     watch(
