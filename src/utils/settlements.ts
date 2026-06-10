@@ -7,6 +7,15 @@ export interface MemberPaymentStat {
   percent: number
 }
 
+export interface MemberExpenseLine {
+  paymentId: string
+  description: string
+  expenseTotal: number
+  share: number
+  splitPct: number
+  paidById: string
+}
+
 /**
  * Minimize-transactions debt settlement algorithm.
  * Pure function — no side effects, safe to call in a computed.
@@ -126,4 +135,27 @@ export function computeMemberPaymentStats(
   })
 
   return stats
+}
+
+/** Per-expense breakdown of one member's share across all logged payments. */
+export function computeMemberExpenseLines(
+  friendId: string,
+  payments: Payment[],
+): MemberExpenseLine[] {
+  const lines: MemberExpenseLine[] = []
+
+  for (const p of payments) {
+    if (!p.splitAmong.includes(friendId)) continue
+    const splitPct = p.splitPercentages?.[friendId] ?? (100 / p.splitAmong.length)
+    lines.push({
+      paymentId: p.id,
+      description: p.description || 'Expense',
+      expenseTotal: p.amount,
+      share: Math.round(p.amount * splitPct / 100 * 100) / 100,
+      splitPct,
+      paidById: p.paidById,
+    })
+  }
+
+  return lines
 }

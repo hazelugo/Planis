@@ -18,6 +18,51 @@ const formExpanded = ref(false)
 const nameInputRef = ref<HTMLInputElement | null>(null)
 function expandForm() { formExpanded.value = true; nextTick(() => nameInputRef.value?.focus()) }
 
+// ── Inline add per day ────────────────────────────────────────────────────
+const inlineAddDate = ref<string | null>(null)
+const inlineAddNameRef = ref<HTMLInputElement | null>(null)
+const inlineAdd = ref({ name: '', time: '' })
+
+function dayAddKey(date: string) {
+  return date || '__none__'
+}
+
+function isInlineAddOpen(date: string) {
+  return inlineAddDate.value === dayAddKey(date)
+}
+
+function openInlineAdd(date: string) {
+  const key = dayAddKey(date)
+  if (inlineAddDate.value === key) {
+    inlineAddDate.value = null
+    return
+  }
+  inlineAddDate.value = key
+  inlineAdd.value = { name: '', time: '' }
+  nextTick(() => inlineAddNameRef.value?.focus())
+}
+
+function cancelInlineAdd() {
+  inlineAddDate.value = null
+}
+
+function addInlineEvent(date: string) {
+  if (!inlineAdd.value.name.trim()) return
+  trip.addEvent({
+    name: inlineAdd.value.name.trim(),
+    date: date || '',
+    time: inlineAdd.value.time,
+    category: 'Adventure',
+    cost: 0,
+    perPerson: false,
+    location: '',
+    notes: '',
+    url: '',
+  })
+  inlineAdd.value = { name: '', time: '' }
+  nextTick(() => inlineAddNameRef.value?.focus())
+}
+
 // ── Edit ──────────────────────────────────────────────────────────────────
 const editingId = ref<string | null>(null)
 const editForm = reactive({ name: '', date: '', time: '', category: 'Adventure' as EventCategory, cost: 0, perPerson: false, location: '', notes: '', url: '' })
@@ -471,7 +516,22 @@ async function openTripInMaps() {
       <div v-else class="space-y-8">
         <div v-for="group in groupedEvents" :key="group.date || '__none__'">
           <div class="flex items-baseline justify-between mb-4 pb-3 border-b border-slate-100 dark:border-hairline gap-2">
-            <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 leading-none min-w-0">{{ group.label }}</h3>
+            <div class="flex items-center gap-2 min-w-0">
+              <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 leading-none min-w-0">{{ group.label }}</h3>
+              <button
+                v-if="trip.canEdit"
+                type="button"
+                @click="openInlineAdd(group.date)"
+                :aria-label="`Add event on ${group.label}`"
+                :title="`Add event on ${group.label}`"
+                :class="['print:hidden w-6 h-6 flex items-center justify-center rounded-lg shrink-0 transition-colors',
+                  isInlineAddOpen(group.date)
+                    ? 'bg-teal-600 text-white'
+                    : 'text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 hover:bg-teal-100 dark:hover:bg-teal-900/30']"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
             <div class="flex items-center gap-2 shrink-0">
               <button
                 v-if="tripMapDayForKey(group.date)"
@@ -484,6 +544,48 @@ async function openTripInMaps() {
               <span class="text-xs font-semibold text-slate-400 whitespace-nowrap">${{ fmt(group.total) }}</span>
             </div>
           </div>
+
+          <div
+            v-if="isInlineAddOpen(group.date)"
+            class="print:hidden mb-3 flex flex-col sm:flex-row gap-2 sm:items-center"
+          >
+            <input
+              ref="inlineAddNameRef"
+              v-model="inlineAdd.name"
+              type="text"
+              maxlength="120"
+              :aria-label="`Event name for ${group.label}`"
+              placeholder="What's the plan?"
+              @keydown.enter="addInlineEvent(group.date)"
+              @keydown.escape="cancelInlineAdd"
+              class="flex-1 min-w-0 px-3 py-2 border border-teal-200 dark:border-teal-700 rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+            <div class="flex gap-2 shrink-0">
+              <input
+                v-model="inlineAdd.time"
+                type="time"
+                aria-label="Time"
+                class="w-[7.5rem] px-2 py-2 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+              <button
+                type="button"
+                @click="addInlineEvent(group.date)"
+                :disabled="!inlineAdd.name.trim()"
+                class="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-40 transition-colors"
+              >
+                Add
+              </button>
+              <button
+                type="button"
+                @click="cancelInlineAdd"
+                aria-label="Cancel"
+                class="w-9 h-9 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-inset transition-colors"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+
           <div class="relative">
             <div class="absolute left-5 top-0 bottom-0 w-px bg-slate-200 dark:bg-[#2a3347]"></div>
             <div class="space-y-1">

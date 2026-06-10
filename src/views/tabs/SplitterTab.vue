@@ -2,8 +2,8 @@
 import { ref, reactive, computed, nextTick } from 'vue'
 import { useTripStore } from '@/stores/trips'
 import { useUIStore } from '@/stores/ui'
-import { computeMemberPaymentStats } from '@/utils/settlements'
-import type { Payment } from '@/types/domain'
+import { computeMemberPaymentStats, computeMemberExpenseLines } from '@/utils/settlements'
+import type { Friend, Payment } from '@/types/domain'
 
 const trip = useTripStore()
 const ui = useUIStore()
@@ -13,6 +13,7 @@ const editingPaymentId = ref<string | null>(null)
 const newFriendName = ref('')
 const formCardRef = ref<HTMLElement | null>(null)
 const formFlashing = ref(false)
+const selectedMember = ref<Friend | null>(null)
 const AVATAR_COLORS = ['#6366f1', '#14b8a6', '#f59e0b', '#10b981', '#8b5cf6']
 const avatarColorMap = computed(() => new Map(trip.state.friends.map((f, i) => [f.id, AVATAR_COLORS[i % 5]])))
 const avatarColor = (id: string) => avatarColorMap.value.get(id) ?? AVATAR_COLORS[0]
@@ -34,12 +35,46 @@ const memberPaidStats = computed(() =>
 function memberPaid(id: string) {
   return memberPaidStats.value.get(id) ?? { amount: 0, percent: 0 }
 }
+
+const selectedMemberLines = computed(() =>
+  selectedMember.value
+    ? computeMemberExpenseLines(selectedMember.value.id, trip.state.payments)
+    : []
+)
+
+const selectedMemberFronted = computed(() => {
+  if (!selectedMember.value) return 0
+  return trip.state.payments
+    .filter(p => p.paidById === selectedMember.value!.id)
+    .reduce((s, p) => s + p.amount, 0)
+})
+
+function openMemberDetails(f: Friend) {
+  selectedMember.value = f
+}
+
+function closeMemberDetails() {
+  selectedMember.value = null
+}
 const splitPercentageTotal = computed(() => {
   return Math.round(Object.values(newPayment.splitPercentages).reduce((s, v) => s + (v || 0), 0) * 100) / 100
 })
 const splitValid = computed(() => newPayment.splitAmong.length === 0 || Math.abs(splitPercentageTotal.value - 100) < 0.01)
 
 function fmt(n: number) { return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) }
+
+function paymentSplits(payment: Payment) {
+  if (!payment.splitAmong.length) return []
+  return payment.splitAmong.map(id => {
+    const pct = payment.splitPercentages?.[id] ?? (100 / payment.splitAmong.length)
+    return {
+      id,
+      name: friendName(id),
+      pct: Math.round(pct * 10) / 10,
+      amount: Math.round(payment.amount * pct / 100 * 100) / 100,
+    }
+  })
+}
 
 function redistributeEqual() {
   const pct = 100 / newPayment.splitAmong.length
@@ -117,6 +152,19 @@ function cancelEdit() {
 async function removePayment(id: string) {
   const ok = await ui.showConfirm({ title: 'Delete this expense?', message: 'This cannot be undone.', okLabel: 'Delete' })
   if (ok) trip.removePayment(id)
+}
+
+async function removeFriend(id: string, name: string) {
+  const ok = await ui.showConfirm({
+    title: `Remove ${name}?`,
+    message: 'Expenses they paid will be deleted. They’ll be removed from splits on other expenses.',
+    okLabel: 'Remove',
+    okClass: 'bg-rose-500 hover:bg-rose-600',
+  })
+  if (ok) {
+    if (selectedMember.value?.id === id) closeMemberDetails()
+    trip.removeFriend(id)
+  }
 }
 </script>
 
@@ -257,7 +305,16 @@ async function removePayment(id: string) {
             :style="`background:${avatarColor(f.id)}`">
             {{ friendInitial(f.name) }}
           </div>
-          <span class="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate w-full text-center leading-tight">{{ f.name }}</span>
+          <span
+            role="button"
+            tabindex="0"
+            @click="openMemberDetails(f)"
+            @keydown.enter="openMemberDetails(f)"
+            @keydown.space.prevent="openMemberDetails(f)"
+            class="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate w-full text-center leading-tight cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 transition-colors underline-offset-2 hover:underline"
+          >
+            {{ f.name }}
+          </span>
           <div v-if="totalPayments > 0" class="w-full space-y-1.5">
             <p class="text-[11px] font-bold text-teal-600 dark:text-teal-400 tabular-nums text-center leading-none">
               ${{ fmt(memberPaid(f.id).amount) }}
@@ -271,7 +328,7 @@ async function removePayment(id: string) {
               />
             </div>
           </div>
-          <button @click="trip.removeFriend(f.id)"
+          <button @click.stop="removeFriend(f.id, f.name)"
             :aria-label="`Remove ${f.name}`"
             class="absolute -top-1 -right-1 w-10 h-10 rounded-full bg-surface text-slate-400 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 shadow-sm transition-all lg:opacity-0 lg:group-hover:opacity-100 flex items-center justify-center">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -350,47 +407,150 @@ async function removePayment(id: string) {
       </div>
       <div class="divide-y divide-slate-50 dark:divide-hairline">
         <div v-for="payment in trip.state.payments" :key="payment.id"
-          class="flex items-start justify-between py-4 group transition-opacity"
+          class="py-4 group transition-opacity"
           :class="payment.settled ? 'opacity-45' : ''">
-          <div class="flex items-start gap-3.5 flex-1 min-w-0">
-            <div :class="['w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5 shadow-sm']"
-              :style="payment.settled ? 'background:linear-gradient(135deg,#cbd5e1,#94a3b8)' : `background:${avatarColor(payment.paidById)}`">
-              {{ friendInitial(friendName(payment.paidById)) }}
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3.5 flex-1 min-w-0">
+              <div :class="['w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 mt-0.5 shadow-sm']"
+                :style="payment.settled ? 'background:linear-gradient(135deg,#cbd5e1,#94a3b8)' : `background:${avatarColor(payment.paidById)}`">
+                {{ friendInitial(friendName(payment.paidById)) }}
+              </div>
+              <div class="min-w-0 flex-1">
+                <p :class="['text-sm font-semibold leading-snug truncate', payment.settled ? 'text-slate-400' : 'text-slate-800 dark:text-slate-200']">
+                  {{ payment.description || 'Expense' }}
+                  <span v-if="payment.settled" class="ml-1 text-emerald-500 font-bold">✓</span>
+                </p>
+                <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                  <span :class="['font-semibold', payment.settled ? 'text-slate-400' : 'text-teal-600 dark:text-teal-400']">{{ friendName(payment.paidById) }}</span>
+                  <span> paid</span>
+                </p>
+              </div>
             </div>
-            <div class="min-w-0 flex-1">
-              <p :class="['text-sm font-semibold leading-snug truncate', payment.settled ? 'text-slate-400' : 'text-slate-800 dark:text-slate-200']">
-                {{ payment.description || 'Expense' }}
-                <span v-if="payment.settled" class="ml-1 text-emerald-500 font-bold">✓</span>
-              </p>
-              <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">
-                <span :class="['font-semibold', payment.settled ? 'text-slate-400' : 'text-teal-600 dark:text-teal-400']">{{ friendName(payment.paidById) }}</span>
-                <span> paid · </span>
-                <span>{{ payment.splitAmong.length === trip.state.friends.length ? 'split with everyone' : `split with ${payment.splitAmong.map(id => friendName(id)).join(', ')}` }}</span>
-              </p>
+            <div class="flex items-center gap-2 shrink-0 pt-0.5">
+              <span :class="['text-base font-bold tabular-nums', payment.settled ? 'text-slate-400' : 'text-slate-800 dark:text-slate-200']">
+                ${{ fmt(payment.amount) }}
+              </span>
+              <label class="flex items-center gap-1 cursor-pointer select-none" :title="payment.settled ? 'Mark unsettled' : 'Mark settled'">
+                <input type="checkbox" :checked="payment.settled"
+                  @change="trip.updatePayment(payment.id, { settled: !payment.settled })"
+                  class="w-3.5 h-3.5 rounded text-emerald-500 border-slate-300 focus:ring-emerald-400 cursor-pointer" />
+                <span :class="['text-xs font-semibold', payment.settled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400']">
+                  {{ payment.settled ? 'Settled' : 'Settle' }}
+                </span>
+              </label>
+              <button @click="editPayment(payment)" aria-label="Edit expense" class="lg:opacity-0 lg:group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button @click="removePayment(payment.id)" aria-label="Delete expense" class="lg:opacity-0 lg:group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
             </div>
           </div>
-          <div class="flex items-center gap-2 shrink-0 ml-4 pt-0.5">
-            <span :class="['text-base font-bold tabular-nums', payment.settled ? 'text-slate-400' : 'text-slate-800 dark:text-slate-200']">
-              ${{ fmt(payment.amount) }}
-            </span>
-            <label class="flex items-center gap-1 cursor-pointer select-none" :title="payment.settled ? 'Mark unsettled' : 'Mark settled'">
-              <input type="checkbox" :checked="payment.settled"
-                @change="trip.updatePayment(payment.id, { settled: !payment.settled })"
-                class="w-3.5 h-3.5 rounded text-emerald-500 border-slate-300 focus:ring-emerald-400 cursor-pointer" />
-              <span :class="['text-xs font-semibold', payment.settled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400']">
-                {{ payment.settled ? 'Settled' : 'Settle' }}
+          <div v-if="paymentSplits(payment).length" class="mt-2.5 ml-[3.375rem] flex flex-wrap gap-1.5">
+            <span
+              v-for="split in paymentSplits(payment)"
+              :key="split.id"
+              class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 dark:bg-inset border border-slate-100 dark:border-hairline text-[11px] font-semibold text-slate-600 dark:text-slate-400"
+            >
+              <span
+                class="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0"
+                :style="`background:${avatarColor(split.id)}`"
+              >
+                {{ friendInitial(split.name) }}
               </span>
-            </label>
-            <button @click="editPayment(payment)" aria-label="Edit expense" class="lg:opacity-0 lg:group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button @click="removePayment(payment.id)" aria-label="Delete expense" class="lg:opacity-0 lg:group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
+              <span class="truncate max-w-[5rem]">{{ split.name }}</span>
+              <span class="text-slate-300 dark:text-slate-600">·</span>
+              <span class="tabular-nums text-indigo-600 dark:text-indigo-400">{{ split.pct }}%</span>
+              <span class="text-slate-300 dark:text-slate-600">·</span>
+              <span class="tabular-nums">${{ fmt(split.amount) }}</span>
+            </span>
           </div>
         </div>
       </div>
     </div>
 
   </div>
+
+  <!-- Member expense breakdown -->
+  <Teleport to="body">
+    <div
+      v-if="selectedMember"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-[1px]"
+      @click.self="closeMemberDetails"
+    >
+      <div
+        role="dialog"
+        aria-labelledby="member-expense-title"
+        class="bg-surface rounded-t-2xl sm:rounded-2xl border border-slate-100 dark:border-hairline shadow-xl w-full sm:max-w-md max-h-[85vh] flex flex-col anim-fade-up"
+        style="padding-bottom: env(safe-area-inset-bottom, 0px)"
+      >
+        <div class="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-slate-100 dark:border-hairline shrink-0">
+          <div
+            class="w-11 h-11 rounded-full flex items-center justify-center text-white text-base font-bold shadow-sm shrink-0"
+            :style="`background:${avatarColor(selectedMember.id)}`"
+          >
+            {{ friendInitial(selectedMember.name) }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <h2 id="member-expense-title" class="text-base font-semibold text-slate-800 dark:text-slate-100 truncate">
+              {{ selectedMember.name }}
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Expense breakdown</p>
+          </div>
+          <button
+            type="button"
+            @click="closeMemberDetails"
+            aria-label="Close"
+            class="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 dark:hover:bg-inset shrink-0"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="px-5 py-4 space-y-4 overflow-y-auto">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="rounded-xl bg-teal-50 dark:bg-teal-900/20 px-3 py-2.5">
+              <p class="eyebrow text-teal-600 dark:text-teal-400">Their share</p>
+              <p class="text-lg font-bold text-teal-700 dark:text-teal-300 tabular-nums mt-0.5">
+                ${{ fmt(memberPaid(selectedMember.id).amount) }}
+              </p>
+              <p class="text-[11px] text-teal-600/80 dark:text-teal-400/80 font-semibold">
+                {{ memberPaid(selectedMember.id).percent }}% of trip total
+              </p>
+            </div>
+            <div class="rounded-xl bg-slate-50 dark:bg-inset px-3 py-2.5">
+              <p class="eyebrow">Fronted</p>
+              <p class="text-lg font-bold text-slate-700 dark:text-slate-300 tabular-nums mt-0.5">
+                ${{ fmt(selectedMemberFronted) }}
+              </p>
+              <p class="text-[11px] text-slate-400 font-medium">Paid out of pocket</p>
+            </div>
+          </div>
+
+          <div v-if="!selectedMemberLines.length" class="py-8 text-center rounded-xl border border-dashed border-slate-200 dark:border-hairline">
+            <p class="text-sm text-slate-400 font-medium">No expenses split with them yet</p>
+          </div>
+
+          <ul v-else class="divide-y divide-slate-50 dark:divide-hairline">
+            <li v-for="line in selectedMemberLines" :key="line.paymentId" class="py-3 first:pt-0 last:pb-0">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
+                    {{ line.description }}
+                  </p>
+                  <p class="text-xs text-slate-400 mt-0.5">
+                    {{ line.paidById === selectedMember.id ? 'They paid' : `${friendName(line.paidById)} paid` }}
+                    · {{ Math.round(line.splitPct * 10) / 10 }}% of ${{ fmt(line.expenseTotal) }}
+                  </p>
+                </div>
+                <span class="text-sm font-bold text-slate-800 dark:text-slate-200 tabular-nums shrink-0">
+                  ${{ fmt(line.share) }}
+                </span>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
