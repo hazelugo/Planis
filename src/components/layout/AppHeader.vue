@@ -31,11 +31,11 @@ const tripsOpen = ref(false)
 const copiedTripId = ref<string | null>(null)
 
 const TAB_META: Record<string, { label: string; desc: string }> = {
-  overview:   { label: 'Overview',  desc: "How it's shaping up" },
+  overview:   { label: 'Overview',  desc: 'Countdown, budget & weather' },
   itinerary:  { label: 'Itinerary', desc: "What's on the agenda" },
-  analytics:  { label: 'Spending',  desc: 'Follow the money' },
-  splitter:   { label: 'Splitter',  desc: 'No awkward IOUs' },
-  // photos:  { label: 'Photos',    desc: 'The memories' },
+  analytics:  { label: 'Spending',  desc: 'Trip costs, broken down' },
+  splitter:   { label: 'Splitter',  desc: 'Split expenses with the crew' },
+  // photos:  { label: 'Photos',    desc: 'Trip memories' },
 }
 const meta = () => TAB_META[props.currentTab] ?? TAB_META.overview
 
