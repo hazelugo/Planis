@@ -102,7 +102,7 @@ async function fetchWeather() {
     const end = endRaw > maxEnd ? maxEnd : endRaw
 
     const wData = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&start_date=${tripStart}&end_date=${end}`,
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&temperature_unit=fahrenheit&timezone=auto&start_date=${tripStart}&end_date=${end}`,
       { signal }
     ).then(r => r.json())
 
@@ -469,9 +469,9 @@ function fmtDate(d: string) {
             <span class="text-3xl leading-none">{{ weatherEmoji(day.code) }}</span>
             <p class="text-[10px] text-slate-500 dark:text-slate-400 text-center leading-snug">{{ day.code != null ? (WMO[day.code] || 'Conditions vary') : 'Conditions vary' }}</p>
             <div v-if="hasTemps(day)" class="flex items-center gap-1.5 mt-0.5 tabular-nums">
-              <span class="text-sm font-bold text-rose-500">{{ day.high }}°C</span>
+              <span class="text-sm font-bold text-rose-500">{{ day.high }}°F</span>
               <span class="text-slate-300">/</span>
-              <span class="text-xs text-blue-500 dark:text-blue-400">{{ day.low }}°C</span>
+              <span class="text-xs text-blue-500 dark:text-blue-400">{{ day.low }}°F</span>
             </div>
             <div class="flex items-center gap-1 text-[10px] text-amber-500 font-medium">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>

@@ -93,9 +93,10 @@ onUnmounted(() => {
         :class="{ 'read-only-trip': trip.isReadOnly }"
       >
         <div class="max-w-5xl mx-auto">
-          <Transition name="fade" mode="out-in">
-            <component :is="TABS[currentTab]" :key="currentTab" />
-          </Transition>
+          <!-- KeepAlive avoids blank gaps from out-in transitions when switching tabs quickly -->
+          <KeepAlive :max="4">
+            <component :is="TABS[currentTab] ?? OverviewTab" :key="currentTab" />
+          </KeepAlive>
         </div>
       </main>
     </div>
@@ -105,8 +106,3 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style scoped>
-.fade-enter-active, .fade-leave-active { transition: opacity 0.15s, transform 0.15s; }
-.fade-enter-from { opacity: 0; transform: translateY(6px); }
-.fade-leave-to   { opacity: 0; transform: translateY(-4px); }
-</style>
