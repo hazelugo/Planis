@@ -105,4 +105,3 @@ onUnmounted(() => {
     <AppBottomNav :current-tab="currentTab" @tab="currentTab = $event" />
   </div>
 </template>
-
