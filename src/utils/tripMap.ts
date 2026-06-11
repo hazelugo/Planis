@@ -1,3 +1,5 @@
+import type { TripEvent } from '@/types/domain'
+
 /** Stops with a geocodable location string. */
 export interface TripMapStop {
   name: string
@@ -12,6 +14,54 @@ export function buildGoogleMapsPlaceUrl(location: string): string | null {
   const q = location.trim()
   if (!q) return null
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
+}
+
+/** Lodging events with a location, oldest to newest. */
+function lodgingWithLocation(events: TripEvent[]): TripEvent[] {
+  return events
+    .filter(e => e.category === 'Lodging' && e.date && (e.location ?? '').trim())
+    .sort((a, b) => {
+      const byDate = a.date.localeCompare(b.date)
+      if (byDate !== 0) return byDate
+      return (a.time || '').localeCompare(b.time || '')
+    })
+}
+
+/**
+ * Hotel active on `date`: most recent Lodging (with location) on or before that date.
+ * Add a new Lodging event on each check-in day when the property changes.
+ */
+export function resolveHotelLocationForDate(allEvents: TripEvent[], date: string): string | null {
+  if (!date) return null
+  let hotel: string | null = null
+  for (const ev of lodgingWithLocation(allEvents)) {
+    if (ev.date <= date) hotel = (ev.location ?? '').trim()
+    else break
+  }
+  return hotel
+}
+
+/**
+ * Daily directions: hotel → day's activities (time order) → same hotel.
+ * Falls back to activity-only stops when no lodging applies.
+ */
+export function buildDayRouteLocations(
+  dayEvents: TripEvent[],
+  allEvents: TripEvent[],
+  date: string,
+): string[] {
+  const hotel = resolveHotelLocationForDate(allEvents, date)
+  const activityLocs: string[] = []
+  for (const ev of dayEvents) {
+    if (ev.category === 'Lodging') continue
+    const loc = (ev.location ?? '').trim()
+    if (loc) activityLocs.push(loc)
+  }
+
+  if (!hotel) return activityLocs
+  const middle = activityLocs.filter(loc => loc !== hotel)
+  if (middle.length === 0) return [hotel]
+  return [hotel, ...middle, hotel]
 }
 
 /** Multi-stop directions for a single day (keep daily batches small). */

@@ -3,7 +3,7 @@ import { ref, computed, reactive, nextTick } from 'vue'
 import { useTripStore } from '@/stores/trips'
 import { useUIStore } from '@/stores/ui'
 import {
-  buildGoogleMapsDirectionsUrl, downloadTripKml,
+  buildDayRouteLocations, buildGoogleMapsDirectionsUrl, downloadTripKml,
   GOOGLE_MY_MAPS_URL, openMapsUrl, type TripMapStop,
 } from '@/utils/tripMap'
 import type { TripEvent, EventCategory } from '@/types/domain'
@@ -290,7 +290,9 @@ function tripMapDayForKey(date: string) {
 
 function openDayInMaps(day: TripMapDay) {
   showMapDayPicker.value = false
-  const url = buildGoogleMapsDirectionsUrl(day.stops.map(s => s.location))
+  const group = groupedEvents.value.find(g => (g.date || '__none__') === day.key)
+  const locations = buildDayRouteLocations(group?.events ?? [], trip.state.events, group?.date ?? '')
+  const url = buildGoogleMapsDirectionsUrl(locations)
   if (url) openMapsUrl(url)
 }
 
