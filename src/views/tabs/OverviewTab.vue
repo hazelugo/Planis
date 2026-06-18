@@ -179,6 +179,7 @@ watch(() => trip.state.trip.destination, (val) => {
 })
 
 function startDestEdit() {
+  if (!trip.canEdit) return
   destEditing.value = true
   setTimeout(() => (document.getElementById('dest-input') as HTMLInputElement)?.focus(), 0)
 }
@@ -257,8 +258,8 @@ function fmtDate(d: string) {
 <template>
   <div class="space-y-5 anim-fade-up">
 
-    <!-- Welcome banner (empty state) -->
-    <div v-if="!trip.state.trip.destination && !trip.state.events.length && !trip.state.friends.length"
+    <!-- Welcome banner (empty state — editors only) -->
+    <div v-if="trip.canEdit && !trip.state.trip.destination && !trip.state.events.length && !trip.state.friends.length"
       class="bg-gradient-to-r from-teal-50 via-cyan-50 to-teal-50 dark:from-teal-950/40 dark:via-teal-900/20 dark:to-teal-950/40 border border-teal-100 dark:border-teal-800/40 rounded-2xl p-6 flex items-center gap-5 overflow-hidden">
       <svg width="48" height="48" class="anim-float shrink-0 text-teal-600 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-trip"/></svg>
       <div>
@@ -274,6 +275,41 @@ function fmtDate(d: string) {
 
       <!-- Trip header (3 cols) -->
       <div class="lg:col-span-3 bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-7 space-y-5">
+
+        <!-- View-only trip details -->
+        <div v-if="!trip.canEdit" class="space-y-5">
+          <h1 class="truncate text-slate-900 dark:text-slate-100" style="font-size:1.75rem;font-weight:700;line-height:1.2;letter-spacing:-0.01em">
+            {{ trip.state.trip.destination || 'Trip plan' }}
+          </h1>
+          <div v-if="trip.state.trip.startDate || trip.state.trip.endDate" class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
+            <div>
+              <p class="eyebrow mb-1">From</p>
+              <p class="font-medium">{{ trip.state.trip.startDate ? fmtDate(trip.state.trip.startDate) : '—' }}</p>
+            </div>
+            <span class="text-slate-300 text-lg font-light mt-4 shrink-0">→</span>
+            <div>
+              <p class="eyebrow mb-1">To</p>
+              <p class="font-medium">{{ trip.state.trip.endDate ? fmtDate(trip.state.trip.endDate) : '—' }}</p>
+            </div>
+          </div>
+          <p v-else class="text-sm text-slate-500 dark:text-slate-400 italic">Dates not set yet</p>
+          <div class="flex items-center gap-3 pt-1 border-t border-slate-100 dark:border-hairline">
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span v-if="trip.tripDuration > 0" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/30 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                {{ trip.tripDuration }} days
+              </span>
+              <span v-if="trip.daysUntilTrip !== null && trip.daysUntilTrip > 0" class="text-xs text-slate-500 dark:text-slate-400">· {{ trip.daysUntilTrip }} to go</span>
+              <span v-else-if="trip.daysUntilTrip === 0" class="text-xs text-teal-600 dark:text-teal-400 font-semibold">· 🎉 Today!</span>
+            </div>
+            <div v-if="trip.state.budget > 0" class="ml-auto flex items-center gap-1.5 shrink-0">
+              <span class="eyebrow">Budget</span>
+              <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">${{ fmt(trip.state.budget) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editable trip details -->
+        <div v-else class="trip-edit-zone space-y-5">
         <!-- Destination: click-to-edit with autocomplete -->
         <div class="relative">
           <button v-if="!destEditing" @click="startDestEdit" aria-label="Edit destination"
@@ -341,6 +377,7 @@ function fmtDate(d: string) {
             </div>
           </div>
         </div>
+        </div>
       </div>
 
       <!-- Teal hero summary card (2 cols) -->
@@ -391,7 +428,10 @@ function fmtDate(d: string) {
       <div v-else class="lg:col-span-2 rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline p-6 flex flex-col items-center justify-center text-center gap-3">
         <svg width="48" height="48" class="block mx-auto text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-itinerary"/></svg>
         <p class="text-sm font-semibold text-slate-600 dark:text-slate-400">Your trip summary will appear here</p>
-        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Add your destination and dates<br>to get started</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          <template v-if="trip.canEdit">Add your destination and dates<br>to get started</template>
+          <template v-else>Costs and dates will show up<br>once the organizer adds them</template>
+        </p>
       </div>
     </div>
 
@@ -421,7 +461,7 @@ function fmtDate(d: string) {
       <div class="px-5 py-4 flex flex-col gap-1.5">
         <p class="eyebrow">Duration</p>
         <p class="text-2xl font-black text-slate-800 dark:text-slate-100 leading-none">{{ trip.tripDuration || '—' }}</p>
-        <p class="text-xs text-slate-500 dark:text-slate-400">{{ trip.tripDuration > 0 ? 'days' : 'Set dates above' }}</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">{{ trip.tripDuration > 0 ? 'days' : (trip.canEdit ? 'Set dates above' : 'Dates TBD') }}</p>
       </div>
 
       <!-- Events -->

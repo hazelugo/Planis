@@ -68,6 +68,7 @@ const editingId = ref<string | null>(null)
 const editForm = reactive({ name: '', date: '', time: '', category: 'Adventure' as EventCategory, cost: 0, perPerson: false, location: '', notes: '', url: '' })
 
 function startEdit(event: TripEvent) {
+  if (!trip.canEdit) return
   editingId.value = event.id
   Object.assign(editForm, { location: '', ...event })
 }
@@ -327,10 +328,12 @@ async function openTripInMaps() {
 <template>
   <div class="space-y-5 anim-fade-up">
 
+    <!-- Add UI — editors only -->
+    <template v-if="trip.canEdit">
     <!-- Collapsed add bar — shown when events exist and form is not open -->
     <div v-if="trip.state.events.length > 0 && !formExpanded"
       @click="expandForm"
-      class="print:hidden bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm px-5 py-3.5 flex items-center gap-3 cursor-text group hover:border-teal-200 dark:hover:border-teal-700 transition-all">
+      class="trip-edit-zone print:hidden bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm px-5 py-3.5 flex items-center gap-3 cursor-text group hover:border-teal-200 dark:hover:border-teal-700 transition-all">
       <div class="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-900/20 flex items-center justify-center shrink-0">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" class="text-teal-500"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </div>
@@ -339,7 +342,7 @@ async function openTripInMaps() {
     </div>
 
     <!-- Full add form — always shown when no events, or when expanded -->
-    <div v-else class="print:hidden bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-6">
+    <div v-else class="trip-edit-zone print:hidden bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-6">
       <div v-if="trip.state.events.length > 0" class="flex items-center justify-between mb-4">
         <p class="eyebrow text-teal-600 dark:text-teal-400">Add event</p>
         <button @click="formExpanded = false" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-inset transition-all" aria-label="Close form">
@@ -418,6 +421,7 @@ async function openTripInMaps() {
         {{ addSuccess ? '✓ Added to your itinerary!' : 'Add to Itinerary' }}
       </button>
     </div>
+    </template>
 
     <!-- Empty state -->
     <div v-if="!trip.state.events.length" class="bg-surface rounded-2xl border-2 border-dashed border-slate-200 dark:border-hairline py-16 px-8 text-center">
@@ -430,8 +434,11 @@ async function openTripInMaps() {
         <div class="w-3 h-3 rounded-full border-2 border-dashed border-slate-300 dark:border-slate-600 bg-surface"></div>
         <div class="w-px h-8 border-l-2 border-dashed border-slate-200 dark:border-hairline"></div>
       </div>
-      <p class="text-xl font-bold text-slate-600 dark:text-slate-400">Your adventure is waiting</p>
-      <p class="text-sm text-slate-400 mt-2 max-w-xs mx-auto leading-relaxed">Start adding flights, dinners, hikes, and hidden gems. Every great trip begins with a plan.</p>
+      <p class="text-xl font-bold text-slate-600 dark:text-slate-400">{{ trip.canEdit ? 'Your adventure is waiting' : 'Nothing on the agenda yet' }}</p>
+      <p class="text-sm text-slate-400 mt-2 max-w-xs mx-auto leading-relaxed">
+        <template v-if="trip.canEdit">Start adding flights, dinners, hikes, and hidden gems. Every great trip begins with a plan.</template>
+        <template v-else>Check back once the trip organizer adds events to the itinerary.</template>
+      </p>
     </div>
 
     <!-- Search bar + event list -->
@@ -548,8 +555,8 @@ async function openTripInMaps() {
           </div>
 
           <div
-            v-if="isInlineAddOpen(group.date)"
-            class="print:hidden mb-3 flex flex-col sm:flex-row gap-2 sm:items-center"
+            v-if="trip.canEdit && isInlineAddOpen(group.date)"
+            class="trip-edit-zone print:hidden mb-3 flex flex-col sm:flex-row gap-2 sm:items-center"
           >
             <input
               ref="inlineAddNameRef"
@@ -594,8 +601,8 @@ async function openTripInMaps() {
               <template v-for="event in group.events">
 
                 <!-- Inline edit -->
-                <div v-if="editingId === event.id" :key="event.id + '-edit'"
-                  class="relative z-20 ml-10 bg-surface rounded-2xl border-2 border-teal-300 dark:border-teal-700 shadow-md p-5 mb-2">
+                <div v-if="trip.canEdit && editingId === event.id" :key="event.id + '-edit'"
+                  class="trip-edit-zone relative z-20 ml-10 bg-surface rounded-2xl border-2 border-teal-300 dark:border-teal-700 shadow-md p-5 mb-2">
                   <p class="eyebrow text-teal-600 dark:text-teal-400 mb-4">Editing Event</p>
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div class="sm:col-span-2">
@@ -677,11 +684,11 @@ async function openTripInMaps() {
                           <span :class="['text-[11px] px-2 py-0.5 rounded-full font-semibold', CAT_COLORS[event.category]?.badge]">{{ event.category }}</span>
                           <span v-if="event.perPerson" class="text-[11px] bg-slate-100 dark:bg-inset text-slate-500 px-2 py-0.5 rounded-full">Per person</span>
                         </div>
-                        <p v-if="(event.location ?? '').trim()" class="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5 leading-snug line-clamp-2">
+                        <p v-if="(event.location ?? '').trim()" class="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5 leading-snug">
                           <a v-if="eventMapsUrl(event)" :href="eventMapsUrl(event)!" target="_blank" rel="noopener" class="hover:underline">{{ (event.location ?? '').trim() }}</a>
                           <span v-else>{{ (event.location ?? '').trim() }}</span>
                         </p>
-                        <p v-if="event.notes" class="text-xs text-slate-400 mt-2 leading-relaxed pl-3 border-l-2 border-slate-100 dark:border-hairline line-clamp-2">{{ event.notes }}</p>
+                        <p v-if="event.notes" class="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed pl-3 border-l-2 border-slate-200 dark:border-hairline whitespace-pre-wrap">{{ event.notes }}</p>
                       </div>
                       <div class="text-right shrink-0 ml-2">
                         <p class="font-bold text-slate-700 dark:text-slate-300 text-sm">${{ fmt(event.perPerson ? event.cost * totalParticipants : event.cost) }}</p>
@@ -695,16 +702,18 @@ async function openTripInMaps() {
                           class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all">
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                         </a>
-                        <button @click="startEdit(event)"
-                          aria-label="Edit event"
-                          class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                        </button>
-                        <button @click="removeEvent(event.id)"
-                          aria-label="Delete event"
-                          class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-                        </button>
+                        <template v-if="trip.canEdit">
+                          <button @click="startEdit(event)"
+                            aria-label="Edit event"
+                            class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-teal-500 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-all">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                          <button @click="removeEvent(event.id)"
+                            aria-label="Delete event"
+                            class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                          </button>
+                        </template>
                       </div>
                     </div>
                   </div>

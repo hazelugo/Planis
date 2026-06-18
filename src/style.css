@@ -97,8 +97,8 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* View-only trips: block edits without inert (inert breaks touch scroll on mobile). */
-.read-only-trip :is(input, textarea, select, button) {
+/* View-only trips: block edits inside marked zones only (inert breaks touch scroll on mobile). */
+.read-only-trip .trip-edit-zone :is(input, textarea, select, button) {
   pointer-events: none;
 }
 

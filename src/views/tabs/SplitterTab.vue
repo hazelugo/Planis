@@ -169,10 +169,10 @@ async function removeFriend(id: string, name: string) {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 anim-fade-up">
+  <div :class="['grid gap-5 anim-fade-up', trip.canEdit ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1']">
 
     <!-- Log a payment — primary action, 2 cols wide -->
-    <div ref="formCardRef" :class="['lg:col-span-2 bg-surface rounded-2xl border shadow-sm overflow-hidden transition-all duration-300',
+    <div v-if="trip.canEdit" ref="formCardRef" :class="['trip-edit-zone lg:col-span-2 bg-surface rounded-2xl border shadow-sm overflow-hidden transition-all duration-300',
       formFlashing ? 'border-teal-400 ring-2 ring-teal-300 ring-offset-2 dark:ring-offset-slate-900' : 'border-slate-100 dark:border-hairline']">
       <div class="px-6 pt-5 pb-4 bg-gradient-to-r from-teal-50 via-cyan-50 to-teal-50 dark:from-inset dark:via-inset dark:to-inset border-b border-dashed border-teal-100 dark:border-hairline">
         <div class="flex items-center justify-between">
@@ -281,12 +281,12 @@ async function removeFriend(id: string, name: string) {
     </div>
 
     <!-- Right rail: Crew + Settlements stacked -->
-    <div class="flex flex-col gap-5">
+    <div :class="['flex flex-col gap-5', !trip.canEdit && trip.state.payments.length && 'lg:grid lg:grid-cols-2 lg:gap-5']">
 
     <!-- Who's on this trip -->
     <div class="bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-6 space-y-5">
       <h2 class="eyebrow">Who's on this trip</h2>
-      <div class="flex gap-2">
+      <div v-if="trip.canEdit" class="trip-edit-zone flex gap-2">
         <input v-model="newFriendName" @keydown.enter="addFriendLocal" type="text" aria-label="Add crew member" placeholder="Add a name…" maxlength="50"
           class="flex-1 min-w-0 px-3.5 py-2.5 border border-slate-200 dark:border-hairline rounded-xl text-sm bg-white dark:bg-inset text-slate-700 dark:text-slate-200 placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500" />
         <button @click="addFriendLocal" :disabled="!newFriendName.trim()" aria-label="Add crew member"
@@ -296,7 +296,7 @@ async function removeFriend(id: string, name: string) {
       </div>
       <div v-if="!trip.state.friends.length" class="py-6 text-center">
         <svg width="36" height="36" class="block mx-auto mb-2 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-crew"/></svg>
-        <p class="text-sm text-slate-400 font-medium">Add your crew to get started</p>
+        <p class="text-sm text-slate-400 font-medium">{{ trip.canEdit ? 'Add your crew to get started' : 'No crew added yet' }}</p>
       </div>
       <div v-else class="grid grid-cols-2 gap-2.5">
         <div v-for="f in trip.state.friends" :key="f.id"
@@ -328,7 +328,7 @@ async function removeFriend(id: string, name: string) {
               />
             </div>
           </div>
-          <button @click.stop="removeFriend(f.id, f.name)"
+          <button v-if="trip.canEdit" @click.stop="removeFriend(f.id, f.name)"
             :aria-label="`Remove ${f.name}`"
             class="absolute -top-1 -right-1 w-10 h-10 rounded-full bg-surface text-slate-400 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 shadow-sm transition-all lg:opacity-0 lg:group-hover:opacity-100 flex items-center justify-center">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -342,13 +342,13 @@ async function removeFriend(id: string, name: string) {
       <h2 class="eyebrow">Who Owes What</h2>
       <div v-if="!trip.state.payments.length" class="py-10 text-center">
         <svg width="36" height="36" class="block mx-auto mb-2 text-teal-500 dark:text-teal-400" aria-hidden="true"><use href="/icons.svg#i-empty-spending"/></svg>
-        <p class="text-sm text-slate-400 font-medium">Log expenses to see who owes what</p>
+        <p class="text-sm text-slate-400 font-medium">{{ trip.canEdit ? 'Log expenses to see who owes what' : 'No expenses logged yet' }}</p>
       </div>
       <div v-else-if="!trip.settlements.length" class="py-8 text-center rounded-2xl bg-emerald-50 dark:bg-emerald-900/20">
         <svg width="48" height="48" class="block mx-auto mb-3 text-emerald-500 dark:text-emerald-400" aria-hidden="true"><use href="/icons.svg#i-empty-settled"/></svg>
         <p class="text-base font-bold text-emerald-700 dark:text-emerald-400">All settled up!</p>
         <p class="text-sm text-emerald-600 dark:text-emerald-500 mt-1">Everyone's square — time to enjoy the trip.</p>
-        <button v-if="trip.state.settledPairs.length || trip.state.payments.some(p => p.settled)" @click="trip.unsettleAll()"
+        <button v-if="trip.canEdit && (trip.state.settledPairs.length || trip.state.payments.some(p => p.settled))" @click="trip.unsettleAll()"
           class="mt-4 px-4 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 rounded-full hover:bg-emerald-100 dark:hover:bg-emerald-800/30 transition-colors">
           Reopen balances
         </button>
@@ -381,14 +381,15 @@ async function removeFriend(id: string, name: string) {
               {{ friendInitial(friendName(tx.to)) }}
             </div>
           </div>
-          <div class="mt-3 flex justify-end">
-            <label class="flex items-center gap-2 cursor-pointer select-none">
+          <div v-if="trip.canEdit || isSettled(tx.from, tx.to)" class="mt-3 flex justify-end">
+            <label v-if="trip.canEdit" class="flex items-center gap-2 cursor-pointer select-none">
               <input type="checkbox" :checked="isSettled(tx.from, tx.to)" @change="trip.toggleSettled(tx.from, tx.to)"
                 class="w-4 h-4 rounded text-emerald-500 border-slate-300 focus:ring-emerald-400 cursor-pointer" />
               <span :class="['text-xs font-semibold', isSettled(tx.from, tx.to) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400']">
                 {{ isSettled(tx.from, tx.to) ? '✓ Paid' : 'Mark paid' }}
               </span>
             </label>
+            <span v-else class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ Paid</span>
           </div>
         </div>
       </div>
@@ -397,7 +398,7 @@ async function removeFriend(id: string, name: string) {
     </div><!-- end right rail -->
 
     <!-- Expense Feed -->
-    <div v-if="trip.state.payments.length" class="lg:col-span-3 bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-6">
+    <div v-if="trip.state.payments.length" :class="['bg-surface rounded-2xl border border-slate-100 dark:border-hairline shadow-sm p-6', trip.canEdit && 'lg:col-span-3']">
       <div class="flex items-center justify-between mb-5">
         <h2 class="eyebrow">Expense Feed</h2>
         <span class="text-xs text-slate-400 font-medium bg-slate-50 dark:bg-inset px-3 py-1 rounded-full">
@@ -430,7 +431,7 @@ async function removeFriend(id: string, name: string) {
               <span :class="['text-base font-bold tabular-nums', payment.settled ? 'text-slate-400' : 'text-slate-800 dark:text-slate-200']">
                 ${{ fmt(payment.amount) }}
               </span>
-              <label class="flex items-center gap-1 cursor-pointer select-none" :title="payment.settled ? 'Mark unsettled' : 'Mark settled'">
+              <label v-if="trip.canEdit" class="flex items-center gap-1 cursor-pointer select-none" :title="payment.settled ? 'Mark unsettled' : 'Mark settled'">
                 <input type="checkbox" :checked="payment.settled"
                   @change="trip.updatePayment(payment.id, { settled: !payment.settled })"
                   class="w-3.5 h-3.5 rounded text-emerald-500 border-slate-300 focus:ring-emerald-400 cursor-pointer" />
@@ -438,12 +439,15 @@ async function removeFriend(id: string, name: string) {
                   {{ payment.settled ? 'Settled' : 'Settle' }}
                 </span>
               </label>
+              <span v-else-if="payment.settled" class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">Settled</span>
+              <template v-if="trip.canEdit">
               <button @click="editPayment(payment)" aria-label="Edit expense" class="lg:opacity-0 lg:group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               </button>
               <button @click="removePayment(payment.id)" aria-label="Delete expense" class="lg:opacity-0 lg:group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
+              </template>
             </div>
           </div>
           <div v-if="paymentSplits(payment).length" class="mt-2.5 ml-[3.375rem] flex flex-wrap gap-1.5">

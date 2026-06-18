@@ -182,7 +182,8 @@ const slices = computed(() => {
                 <span v-if="e.time"> · {{ e.time }}</span>
                 <span v-if="e.perPerson" class="ml-1.5 px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-inset text-slate-500 text-[10px] font-semibold">Per person</span>
               </p>
-              <p v-if="e.notes" class="text-xs text-slate-400 mt-1 line-clamp-1 pl-2 border-l-2 border-slate-100 dark:border-hairline">{{ e.notes }}</p>
+              <p v-if="(e.location ?? '').trim()" class="text-xs text-emerald-600 dark:text-emerald-400 mt-1">{{ (e.location ?? '').trim() }}</p>
+              <p v-if="e.notes" class="text-xs text-slate-500 dark:text-slate-400 mt-1 whitespace-pre-wrap pl-2 border-l-2 border-slate-200 dark:border-hairline">{{ e.notes }}</p>
             </div>
             <div class="text-right shrink-0">
               <p class="text-sm font-bold text-slate-700 dark:text-slate-300">${{ fmt(e.perPerson ? e.cost * totalParticipants : e.cost) }}</p>
