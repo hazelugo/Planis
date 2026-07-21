@@ -223,7 +223,7 @@ function esc(s: string) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
-function exportPDF() {
+function exportPDF(includeCosts = true) {
   const dest = esc(trip.state.trip.destination || 'Trip Itinerary')
   const s = trip.state.trip.startDate ? fmtDate(trip.state.trip.startDate) : ''
   const e = trip.state.trip.endDate ? fmtDate(trip.state.trip.endDate) : ''
@@ -236,10 +236,16 @@ function exportPDF() {
   let rows = ''
   let rowIdx = 0
   for (const group of groupedEvents.value) {
-    rows += `<tr>
-      <td colspan="2" style="padding:20px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#64748b;border-bottom:1.5px solid #e2e8f0">${esc(group.label)}</td>
-      <td style="padding:20px 0 6px;font-size:11px;font-weight:700;color:#94a3b8;text-align:right;border-bottom:1.5px solid #e2e8f0">$${fmt(group.total)}</td>
-    </tr>`
+    if (includeCosts) {
+      rows += `<tr>
+        <td colspan="2" style="padding:20px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#64748b;border-bottom:1.5px solid #e2e8f0">${esc(group.label)}</td>
+        <td style="padding:20px 0 6px;font-size:11px;font-weight:700;color:#94a3b8;text-align:right;border-bottom:1.5px solid #e2e8f0">$${fmt(group.total)}</td>
+      </tr>`
+    } else {
+      rows += `<tr>
+        <td colspan="2" style="padding:20px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#64748b;border-bottom:1.5px solid #e2e8f0">${esc(group.label)}</td>
+      </tr>`
+    }
     for (const ev of group.events) {
       const rowBg = rowIdx++ % 2 === 0 ? '#f8fafc' : '#ffffff'
       const costText = ev.perPerson
@@ -253,24 +259,29 @@ function exportPDF() {
           ${(ev.location ?? '').trim() ? `<div style="font-size:12px;color:#64748b;margin-top:3px">📍 ${esc((ev.location ?? '').trim())}</div>` : ''}
           ${ev.notes ? `<div style="font-size:12px;color:#64748b;font-style:italic;margin-top:3px">${esc(ev.notes)}</div>` : ''}
         </td>
-        <td style="padding:10px 8px 10px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;white-space:nowrap;width:72px;vertical-align:top">${costText}</td>
+        ${includeCosts ? `<td style="padding:10px 8px 10px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;white-space:nowrap;width:72px;vertical-align:top">${costText}</td>` : ''}
       </tr>`
     }
   }
 
-  const totalCost = groupedEvents.value.reduce((s, g) => s + g.total, 0)
+  const totalCost = groupedEvents.value.reduce((sum, g) => sum + g.total, 0)
+  const docTitle = includeCosts ? `${dest} — Itinerary` : `${dest} — Agenda`
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<title>${dest} — Itinerary</title>
+<title>${docTitle}</title>
 <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Georgia,serif;color:#1e293b;padding:48px 40px;max-width:720px;margin:0 auto}@media print{@page{margin:1.5cm}body{padding:0}}table{width:100%;border-collapse:collapse}</style>
 </head><body>
 <h1 style="font-size:26px;font-weight:700;color:#0f172a;letter-spacing:-.02em">${dest}</h1>
 ${dateRange ? `<p style="font-size:14px;color:#64748b;margin-top:4px">${dateRange}</p>` : ''}
 <table style="margin-top:32px">${rows}</table>
-${totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;color:#0f172a;text-align:right;border-top:2px solid #0f172a;padding-top:8px">Total: $${fmt(totalCost)}</p>` : ''}
+${includeCosts && totalCost > 0 ? `<p style="margin-top:20px;font-size:13px;font-weight:700;color:#0f172a;text-align:right;border-top:2px solid #0f172a;padding-top:8px">Total: $${fmt(totalCost)}</p>` : ''}
 </body></html>`
 
   const win = window.open('', '_blank')
   if (win) { win.document.write(html); win.document.close() }
+}
+
+function exportAgendaPDF() {
+  exportPDF(false)
 }
 
 function tripKmlFilename() {
@@ -472,12 +483,19 @@ async function openTripInMaps() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
             Map
           </button>
-          <!-- Export PDF -->
-          <button @click="exportPDF" aria-label="Export itinerary to PDF"
+          <!-- Export PDF (with costs) -->
+          <button @click="exportPDF()" aria-label="Export itinerary with costs to PDF"
             class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset transition-all shrink-0"
-            title="Export to PDF">
+            title="Print itinerary with costs">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             PDF
+          </button>
+          <!-- Export agenda PDF (no costs) -->
+          <button @click="exportAgendaPDF" aria-label="Export itinerary without costs to PDF"
+            class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-hairline text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-inset transition-all shrink-0"
+            title="Print itinerary without costs">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Agenda
           </button>
           <!-- Clear -->
           <button v-if="hasFilter" @click="clearFilters" aria-label="Clear filters"
