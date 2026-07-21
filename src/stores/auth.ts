@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-
+import { buildAppUrl } from '@/lib/appUrl'
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const session = ref<Session | null>(null)
@@ -13,36 +13,41 @@ export const useAuthStore = defineStore('auth', () => {
   let initialized = false
 
   /** Call once from main.ts before app.mount(). */
-  function initialize(): Promise<void> {
-    if (initialized) return Promise.resolve()
+  async function initialize(): Promise<void> {
+    if (initialized) return
     initialized = true
 
-    return new Promise((resolve) => {
-      supabase.auth.getSession().then(({ data }) => {
-        session.value = data.session
-        user.value = data.session?.user ?? null
-        loading.value = false
-        resolve()
-      })
+    // Magic link (PKCE) returns ?code=… — exchange before reading the session.
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      params.delete('code')
+      const rest = params.toString()
+      const cleanUrl = `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`
+      window.history.replaceState({}, '', cleanUrl)
+      if (error) console.error('[Planis] Magic link sign-in failed:', error.message)
+    }
 
-      supabase.auth.onAuthStateChange((_event, newSession) => {
-        session.value = newSession
-        user.value = newSession?.user ?? null
-        loading.value = false
-      })
+    const { data } = await supabase.auth.getSession()
+    session.value = data.session
+    user.value = data.session?.user ?? null
+    loading.value = false
+
+    supabase.auth.onAuthStateChange((_event, newSession) => {
+      session.value = newSession
+      user.value = newSession?.user ?? null
+      loading.value = false
     })
   }
 
   function buildRedirectUrl(): string {
-    const url = new URL(window.location.origin + '/')
     const params = new URLSearchParams(window.location.search)
-    const trip = params.get('trip')
-    const edit = params.get('edit')
-    if (trip) url.searchParams.set('trip', trip)
-    if (edit) url.searchParams.set('edit', edit)
-    return url.toString()
+    return buildAppUrl('/', {
+      trip: params.get('trip'),
+      edit: params.get('edit'),
+    })
   }
-
   async function signInWithMagicLink(email: string) {
     return supabase.auth.signInWithOtp({
       email: email.trim(),

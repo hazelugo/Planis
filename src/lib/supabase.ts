@@ -12,5 +12,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Falls back to placeholder values so the app renders even if env vars are missing.
 export const supabase = createClient<Database>(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
+  supabaseAnonKey || 'placeholder-key',
+  {
+    auth: {
+      detectSessionInUrl: true,
+      flowType: 'pkce',
+      persistSession: true,
+    },
+  },
 )

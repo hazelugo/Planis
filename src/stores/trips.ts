@@ -24,8 +24,10 @@ export const useTripStore = defineStore('trip', () => {
   const loadStatus = ref<'loading' | 'ready' | 'error'>('loading')
   const loadError = ref<string | null>(null)
   const sessionEditToken = ref<string | null>(null)
+  /** Last known Supabase `updated_at` — used to reject stale cross-tab merges. */
+  const serverUpdatedAt = ref<string | null>(null)
 
-  const state = reactive<TripState>({
+  const EMPTY_TRIP: TripState = {
     trip: { destination: '', startDate: '', endDate: '' },
     attendance: { adults: 2, kids: 0, adultPrice: 0, kidPrice: 0 },
     budget: 0,
@@ -34,7 +36,9 @@ export const useTripStore = defineStore('trip', () => {
     payments: [],
     settledPairs: [],
     photos: [],
-  })
+  }
+
+  const state = reactive<TripState>(structuredClone(EMPTY_TRIP))
 
   // ── Computed ─────────────────────────────────────────────────────────────
   const totalParticipants = computed(
@@ -106,8 +110,10 @@ export const useTripStore = defineStore('trip', () => {
       }
       if (auth.user?.id) row.owner_id = auth.user.id
 
+      const savedAt = row.updated_at
       const { error } = await supabase.from('trips').upsert(row)
       if (error) throw error
+      serverUpdatedAt.value = savedAt
       hasSynced.value = true
       broadcastLocalState()
       syncStatus.value = 'saved'
@@ -191,48 +197,105 @@ export const useTripStore = defineStore('trip', () => {
       }
     }
     if (typeof parsed !== 'object' || parsed === null) return null
-    return parsed as TripState
+    return normalizeTripState(parsed as TripState)
+  }
+
+  function normalizeTripState(raw: TripState): TripState {
+    return {
+      trip: {
+        destination: '',
+        startDate: '',
+        endDate: '',
+        ...raw.trip,
+      },
+      attendance: {
+        adults: 2,
+        kids: 0,
+        adultPrice: 0,
+        kidPrice: 0,
+        ...raw.attendance,
+      },
+      budget: raw.budget ?? 0,
+      events: (raw.events ?? []).map(ev => ({
+        location: '',
+        notes: '',
+        url: '',
+        ...ev,
+      })),
+      friends: [...(raw.friends ?? [])],
+      payments: [...(raw.payments ?? [])],
+      settledPairs: [...(raw.settledPairs ?? [])],
+      photos: [...(raw.photos ?? [])],
+      ...(raw.editToken !== undefined ? { editToken: raw.editToken } : {}),
+    }
+  }
+
+  /** Reject stale cross-tab / realtime payloads that would drop newer itinerary data. */
+  function shouldApplyIncoming(incoming: TripState, incomingUpdatedAt?: string | null): boolean {
+    if (incomingUpdatedAt && serverUpdatedAt.value) {
+      return incomingUpdatedAt >= serverUpdatedAt.value
+    }
+    const currentEvents = state.events.length
+    const incomingEvents = incoming.events.length
+    if (currentEvents > 0 && incomingEvents < currentEvents) return false
+    return true
+  }
+
+  function resetState(): void {
+    remoteUpdate = true
+    mergeRemoteState(EMPTY_TRIP)
+    delete state.editToken
+    remoteUpdate = false
   }
 
   /** Replace reactive state so Vue picks up array replacements (events, friends, etc.). */
   function mergeRemoteState(incoming: TripState): void {
-    state.trip = { ...incoming.trip }
-    state.attendance = { ...incoming.attendance }
-    state.budget = incoming.budget ?? 0
-    state.events = [...(incoming.events ?? [])]
-    state.friends = [...(incoming.friends ?? [])]
-    state.payments = [...(incoming.payments ?? [])]
-    state.settledPairs = [...(incoming.settledPairs ?? [])]
-    state.photos = [...(incoming.photos ?? [])]
-    if (incoming.editToken !== undefined) state.editToken = incoming.editToken
+    const data = normalizeTripState(incoming)
+    state.trip = { ...data.trip }
+    state.attendance = { ...data.attendance }
+    state.budget = data.budget
+    state.events = [...data.events]
+    state.friends = [...data.friends]
+    state.payments = [...data.payments]
+    state.settledPairs = [...data.settledPairs]
+    state.photos = [...data.photos]
+    if (data.editToken !== undefined) state.editToken = data.editToken
     else delete state.editToken
   }
 
-  function applyRemoteTripData(row: Record<string, unknown>): void {
-    const incoming = parseTripData(row.data)
-    if (!incoming) return
-
+  function applyIncomingState(incoming: TripState, incomingUpdatedAt?: string | null): boolean {
+    if (!shouldApplyIncoming(incoming, incomingUpdatedAt)) return false
     remoteUpdate = true
     mergeRemoteState(incoming)
+    if (incomingUpdatedAt) serverUpdatedAt.value = incomingUpdatedAt
     hasSynced.value = true
     syncStatus.value = 'saved'
     setTimeout(() => {
       remoteUpdate = false
       if (syncStatus.value === 'saved') syncStatus.value = 'idle'
     }, 0)
+    return true
+  }
+
+  function applyRemoteTripData(row: Record<string, unknown>): void {
+    const incoming = parseTripData(row.data)
+    if (!incoming) return
+    const rowUpdatedAt = typeof row.updated_at === 'string' ? row.updated_at : null
+    applyIncomingState(incoming, rowUpdatedAt)
   }
 
   function broadcastLocalState(): void {
-    if (!broadcastChannel || remoteUpdate) return
+    if (!broadcastChannel || remoteUpdate || !canEdit.value) return
     broadcastChannel.postMessage({
       source: tabInstanceId,
       type: 'state',
       payload: JSON.parse(JSON.stringify(state)) as TripState,
+      updatedAt: serverUpdatedAt.value,
     })
   }
 
   function debouncedBroadcast(): void {
-    if (remoteUpdate || loadStatus.value !== 'ready') return
+    if (remoteUpdate || loadStatus.value !== 'ready' || !canEdit.value) return
     if (broadcastTimer) clearTimeout(broadcastTimer)
     broadcastTimer = setTimeout(() => {
       broadcastTimer = null
@@ -249,16 +312,14 @@ export const useTripStore = defineStore('trip', () => {
     broadcastTripId = id
     broadcastChannel = new BroadcastChannel(`planis:trip:${id}`)
     broadcastChannel.onmessage = (event: MessageEvent) => {
-      const msg = event.data as { source?: string; type?: string; payload?: TripState }
+      const msg = event.data as {
+        source?: string
+        type?: string
+        payload?: TripState
+        updatedAt?: string | null
+      }
       if (!msg || msg.source === tabInstanceId || msg.type !== 'state' || !msg.payload) return
-      remoteUpdate = true
-      mergeRemoteState(msg.payload)
-      hasSynced.value = true
-      syncStatus.value = 'saved'
-      setTimeout(() => {
-        remoteUpdate = false
-        if (syncStatus.value === 'saved') syncStatus.value = 'idle'
-      }, 0)
+      applyIncomingState(normalizeTripState(msg.payload), msg.updatedAt ?? null)
     }
   }
 
@@ -314,6 +375,21 @@ export const useTripStore = defineStore('trip', () => {
     if (loadStatus.value !== 'ready' || !tripId.value) return
     if (!broadcastChannel) setupBroadcastSync(tripId.value)
     if (!channel || subscribedTripId !== tripId.value) subscribeToRealTime()
+    void refreshFromServerIfStale()
+  }
+
+  /** Pull latest trip from Supabase when another tab or device has newer data. */
+  async function refreshFromServerIfStale(): Promise<void> {
+    if (!tripId.value || loadStatus.value !== 'ready') return
+    const { data, error } = await supabase
+      .from('trips')
+      .select('data, updated_at')
+      .eq('id', tripId.value)
+      .maybeSingle()
+    if (error || !data?.data) return
+    const incoming = normalizeTripState(data.data as TripState)
+    if (!shouldApplyIncoming(incoming, data.updated_at)) return
+    applyIncomingState(incoming, data.updated_at)
   }
 
   function teardownRealtimeOnly(): void {
@@ -421,10 +497,12 @@ export const useTripStore = defineStore('trip', () => {
 
     syncTripUrl(id)
     restoreBannerCache(id)
+    resetState()
+    serverUpdatedAt.value = null
 
     const { data, error } = await supabase
       .from('trips')
-      .select('data')
+      .select('data, updated_at')
       .eq('id', id)
       .maybeSingle()
 
@@ -445,7 +523,8 @@ export const useTripStore = defineStore('trip', () => {
       return
     }
 
-    Object.assign(state, data.data as TripState)
+    serverUpdatedAt.value = data.updated_at
+    mergeRemoteState(normalizeTripState(data.data as TripState))
     updateBannerCache(id)
     hasSynced.value = true
 
@@ -479,13 +558,14 @@ export const useTripStore = defineStore('trip', () => {
     const preservedEditToken = state.editToken
     const { data, error } = await supabase
       .from('trips')
-      .select('data')
+      .select('data, updated_at')
       .eq('id', fromTripId)
       .maybeSingle()
     if (error) return 'error'
     if (!data?.data) return 'not-found'
-    Object.assign(state, data.data as TripState)
+    mergeRemoteState(normalizeTripState(data.data as TripState))
     state.editToken = preservedEditToken
+    serverUpdatedAt.value = null
     updateBannerCache(tripId.value)
     void saveTrip()
     return 'ok'
@@ -615,6 +695,7 @@ export const useTripStore = defineStore('trip', () => {
     subscribeToRealTime,
     ensureRealtimeSubscription,
     unsubscribeFromRealTime,
+    refreshFromServerIfStale,
     // Event actions
     addEvent,
     updateEvent,
